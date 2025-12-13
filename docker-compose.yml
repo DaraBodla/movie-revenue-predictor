@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movie_intelligence_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ML Training Pipeline (on-demand)
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movie_intelligence_training
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    command: python src/pipeline/train.py
+    profiles:
+      - training
+    restart: "no"
+
+  # Prefect Pipeline (on-demand)
+  prefect:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movie_intelligence_prefect
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    command: python src/pipeline/prefect_pipeline.py
+    profiles:
+      - prefect
+    restart: "no"
+
+  # DeepChecks Validation (on-demand)
+  validation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movie_intelligence_validation
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    command: python src/pipeline/deepchecks_validation.py
+    profiles:
+      - validation
+    restart: "no"
+
+volumes:
+  data:
+  models:
+  reports:
+
+networks:
+  default:
+    name: movie_intelligence_network
