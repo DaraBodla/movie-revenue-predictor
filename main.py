@@ -5,6 +5,10 @@ Provides endpoints for all ML tasks
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
 
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional
@@ -96,6 +100,10 @@ app = FastAPI(
     description=config.API_DESCRIPTION
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+
 # Optional rate limiting (enabled if slowapi is installed)
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -168,6 +176,12 @@ def _maybe_limit(rule: str):
     def _decorator(fn):
         return fn
     return _decorator
+
+
+@app.get("/ui", response_class=HTMLResponse)
+async def ui(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
 
 @app.get("/", response_model=HealthResponse)
 async def root():
@@ -429,7 +443,9 @@ if __name__ == "__main__":
 async def detailed_health():
     """Detailed health check: reports API + model loading status."""
     status = {"timestamp": datetime.utcnow().isoformat(), "status": "healthy", "checks": {}}
-    status["checks"]["models_loaded"] = {"status": "up" if models.loaded else "not_loaded"}
-    if not models.loaded:
+    loaded = (models is not None and models.regression_model is not None and models.classification_model is not None and models.clustering_model is not None)
+    status["checks"]["models_loaded"] = {"status": "up" if loaded else "not_loaded"}
+    if not loaded:
         status["status"] = "degraded"
+
     return status

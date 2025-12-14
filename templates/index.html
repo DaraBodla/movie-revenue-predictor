@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Movie Intelligence – Predictor</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Movie Intelligence</h1>
+      <p>Enter movie details and get predictions (Revenue / Hit / Cluster).</p>
+    </header>
+
+    <section class="card">
+      <h2>Inputs</h2>
+
+      <div class="grid">
+        <label>
+          Budget (USD)
+          <input id="budget" type="number" min="1" step="1" value="50000000" />
+        </label>
+
+        <label>
+          Popularity
+          <input id="popularity" type="number" min="0" step="0.01" value="12.3" />
+        </label>
+
+        <label>
+          Runtime (minutes)
+          <input id="runtime" type="number" min="1" step="1" value="110" />
+        </label>
+
+        <label>
+          Vote Average (0–10)
+          <input id="vote_average" type="number" min="0" max="10" step="0.1" value="7.1" />
+        </label>
+
+        <label>
+          Vote Count
+          <input id="vote_count" type="number" min="0" step="1" value="3400" />
+        </label>
+
+        <label>
+          Release Month (1–12)
+          <input id="release_month" type="number" min="1" max="12" step="1" value="7" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="btnRevenue">Predict Revenue</button>
+        <button id="btnClassify">Predict Hit/Flop</button>
+        <button id="btnCluster">Predict Cluster</button>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <label>
+          Optional API Key (X-API-Key)
+          <input id="api_key" type="password" placeholder="Leave empty if not enabled" />
+        </label>
+        <p class="hint">If your server sets <code>API_KEY</code> env var, you must send this header.</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Result</h2>
+      <pre id="output" class="output">Run a prediction to see results…</pre>
+    </section>
+
+    <footer>
+      <span class="muted">API: <code>/predict/revenue</code> • <code>/predict/classification</code> • <code>/predict/cluster</code></span>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
