@@ -7,73 +7,152 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <div class="bgGlow"></div>
+
   <div class="container">
-    <header>
-      <h1>Movie Intelligence</h1>
-      <p>Enter movie details and get predictions (Revenue / Hit / Cluster).</p>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">MI</div>
+        <div>
+          <h1>Movie Intelligence</h1>
+          <p class="sub">Predict revenue, hit/flop, and cluster segment from key movie signals.</p>
+        </div>
+      </div>
+      <div class="topbarRight">
+        <span class="pill">FastAPI</span>
+        <span class="pill">Docker</span>
+        <span class="pill">CI/CD</span>
+      </div>
     </header>
 
-    <section class="card">
-      <h2>Inputs</h2>
+    <main class="grid2">
+      <!-- LEFT: Inputs -->
+      <section class="card">
+        <div class="cardHead">
+          <h2>Inputs</h2>
+          <span class="muted">All values are numeric</span>
+        </div>
 
-      <div class="grid">
-        <label>
-          Budget (USD)
-          <input id="budget" type="number" min="1" step="1" value="50000000" />
-        </label>
+        <div class="formGrid">
+          <div class="field">
+            <label>Budget (USD)</label>
+            <input id="budget" type="number" min="1" step="1" value="50000000" />
+            <div class="hint">Production + marketing spend</div>
+          </div>
 
-        <label>
-          Popularity
-          <input id="popularity" type="number" min="0" step="0.01" value="12.3" />
-        </label>
+          <div class="field">
+            <label>Popularity</label>
+            <input id="popularity" type="number" min="0" step="0.01" value="12.3" />
+            <div class="hint">Public interest proxy (e.g., TMDB)</div>
+          </div>
 
-        <label>
-          Runtime (minutes)
-          <input id="runtime" type="number" min="1" step="1" value="110" />
-        </label>
+          <div class="field">
+            <label>Runtime (minutes)</label>
+            <input id="runtime" type="number" min="1" step="1" value="110" />
+            <div class="hint">Final cut duration</div>
+          </div>
 
-        <label>
-          Vote Average (0–10)
-          <input id="vote_average" type="number" min="0" max="10" step="0.1" value="7.1" />
-        </label>
+          <div class="field">
+            <label>Vote Average (0–10)</label>
+            <input id="vote_average" type="number" min="0" max="10" step="0.1" value="7.1" />
+            <div class="hint">Early viewer/critic rating</div>
+          </div>
 
-        <label>
-          Vote Count
-          <input id="vote_count" type="number" min="0" step="1" value="3400" />
-        </label>
+          <div class="field">
+            <label>Vote Count</label>
+            <input id="vote_count" type="number" min="0" step="1" value="3400" />
+            <div class="hint">Number of ratings submitted</div>
+          </div>
 
-        <label>
-          Release Month (1–12)
-          <input id="release_month" type="number" min="1" max="12" step="1" value="7" />
-        </label>
-      </div>
+          <div class="field">
+            <label>Release Month (1–12)</label>
+            <input id="release_month" type="number" min="1" max="12" step="1" value="7" />
+            <div class="hint">Captures seasonality</div>
+          </div>
+        </div>
 
-      <div class="actions">
-        <button id="btnRevenue">Predict Revenue</button>
-        <button id="btnClassify">Predict Hit/Flop</button>
-        <button id="btnCluster">Predict Cluster</button>
-      </div>
+        <div class="divider"></div>
 
-      <details class="advanced">
-        <summary>Advanced</summary>
-        <label>
-          Optional API Key (X-API-Key)
-          <input id="api_key" type="password" placeholder="Leave empty if not enabled" />
-        </label>
-        <p class="hint">If your server sets <code>API_KEY</code> env var, you must send this header.</p>
-      </details>
-    </section>
+        <div class="segmented">
+          <button class="segBtn active" data-mode="all">All</button>
+          <button class="segBtn" data-mode="revenue">Revenue</button>
+          <button class="segBtn" data-mode="classify">Hit/Flop</button>
+          <button class="segBtn" data-mode="cluster">Cluster</button>
+        </div>
 
-    <section class="card">
-      <h2>Result</h2>
-      <pre id="output" class="output">Run a prediction to see results…</pre>
-    </section>
+        <div class="actions">
+          <button id="btnRevenue" class="btn primary">
+            <span>Predict Revenue</span>
+            <span class="kbd">POST</span>
+          </button>
 
-    <footer>
-      <span class="muted">API: <code>/predict/revenue</code> • <code>/predict/classification</code> • <code>/predict/cluster</code></span>
+          <button id="btnClassify" class="btn">
+            <span>Predict Hit/Flop</span>
+            <span class="kbd">POST</span>
+          </button>
+
+          <button id="btnCluster" class="btn">
+            <span>Predict Cluster</span>
+            <span class="kbd">POST</span>
+          </button>
+
+          <button id="btnReset" class="btn ghost" title="Reset to defaults">
+            Reset
+          </button>
+        </div>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+
+          <div class="field">
+            <label>Optional API Key (X-API-Key)</label>
+            <input id="api_key" type="password" placeholder="Leave empty if not enabled" />
+            <div class="hint">Only required if API_KEY is set on the server</div>
+          </div>
+
+          <div class="field">
+            <label>Base URL</label>
+            <input id="base_url" type="text" value="" placeholder="Leave empty for same origin" />
+            <div class="hint">Use if UI is hosted separately (e.g., http://localhost:8000)</div>
+          </div>
+        </details>
+      </section>
+
+      <!-- RIGHT: Results -->
+      <section class="card">
+        <div class="cardHead">
+          <h2>Results</h2>
+          <div class="statusRow">
+            <span id="statusBadge" class="badge idle">Idle</span>
+            <button id="btnCopy" class="iconBtn" title="Copy result JSON">Copy</button>
+          </div>
+        </div>
+
+        <div id="resultCards" class="resultCards">
+          <div class="resultCard mutedCard">
+            <div class="resultTitle">Tip</div>
+            <div class="resultBody">Run a prediction to see structured results here.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="jsonBlock">
+          <div class="jsonHead">
+            <span class="muted">Raw JSON</span>
+            <span id="latency" class="muted"></span>
+          </div>
+          <pre id="output" class="output">Run a prediction to see results…</pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span class="muted">UI: <code>/ui</code> • Docs: <code>/docs</code></span>
     </footer>
   </div>
 
+  <div id="toast" class="toast hidden"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>
