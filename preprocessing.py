@@ -270,15 +270,20 @@ class MovieDataPreprocessor:
                          "but the current dataset does not include them.")
 
 
-def prepare_train_test_split(preprocessor: MovieDataPreprocessor, df: pd.DataFrame,
-                             target_col: str = 'revenue',
-                             test_size: float = config.TEST_SIZE,
-                             random_state: int = config.RANDOM_STATE):
-    """Convenience helper used by the training pipeline."""
-    df_clean = preprocessor.clean_data(df)
-    df_feat = preprocessor.engineer_features(df_clean, fit=True)
-    X, y = preprocessor.prepare_features(df_feat, target_col=target_col, fit=True)
+
+def prepare_train_test_split(X, y, test_size=None, random_state=None):
+    """
+    Split feature matrix X and target y into train/test.
+    Keeps pandas indices intact (important for later steps that map back to df).
+    """
+    if test_size is None:
+        test_size = getattr(config, "TEST_SIZE", 0.2)
+    if random_state is None:
+        random_state = getattr(config, "RANDOM_STATE", 42)
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state
+        X, y,
+        test_size=test_size,
+        random_state=random_state
     )
     return X_train, X_test, y_train, y_test

@@ -50,6 +50,8 @@ class MovieInput(BaseModel):
     runtime: float = Field(..., description="Runtime in minutes", gt=0)
     vote_average: float = Field(..., description="Average rating (0-10)", ge=0, le=10)
     vote_count: float = Field(..., description="Number of votes", ge=0)
+    release_month: int = Field(..., description="Release month (1-12)", ge=1, le=12)
+
 class RevenuePredictionResponse(BaseModel):
     """Revenue prediction response"""
     predicted_revenue: float
@@ -212,7 +214,11 @@ async def health_check():
 
 @app.post("/predict/revenue", response_model=RevenuePredictionResponse)
 @_maybe_limit("100/minute")
-async def predict_revenue(movie: MovieInput, api_key: str = Depends(verify_api_key)):
+async def predict_revenue(
+    request: Request,
+    movie: MovieInput,
+    api_key: str = Depends(verify_api_key)
+):
     """Predict movie revenue for a single movie"""
     if models is None or models.regression_model is None:
         raise HTTPException(status_code=503, detail="Regression model not loaded")
@@ -317,7 +323,7 @@ async def predict_batch(file: UploadFile = File(...)):
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
         
         # Validate required columns
-        required_cols = ['budget','popularity','runtime','vote_average','vote_count']
+        required_cols = ['budget','popularity','runtime','vote_average','vote_count','release_month']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise HTTPException(

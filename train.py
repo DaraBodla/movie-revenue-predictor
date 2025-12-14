@@ -43,6 +43,15 @@ class MLPipeline:
         print("\n[STEP 2] Cleaning data...")
         df = self.preprocessor.clean_data(df)
 
+        # Option 1: Auto-drop runtime outliers before validation
+        # Keep only feature-film runtimes (matches your validation intent)
+        before = len(df)
+        df = df[df["runtime"].between(30, 300)].copy()
+        df.reset_index(drop=True, inplace=True)
+        dropped = before - len(df)
+        print(f"[STEP 2a] Dropped {dropped} rows due to runtime outliers (kept 30–300).")
+
+        
         # Step 2b: Data Validation
         print("\n[STEP 2b] Validating data...")
         validator = DataValidator()
