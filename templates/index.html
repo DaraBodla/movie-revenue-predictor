@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Movie Intelligence – Predictor</title>
+  <title>Movie Intelligence • Predictor</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -15,13 +15,15 @@
         <div class="logo">MI</div>
         <div>
           <h1>Movie Intelligence</h1>
-          <p class="sub">Predict revenue, hit/flop, and cluster segment from key movie signals.</p>
+          <p class="sub">Revenue prediction, hit or flop classification, and clustering insights.</p>
         </div>
       </div>
+
       <div class="topbarRight">
         <span class="pill">FastAPI</span>
         <span class="pill">Docker</span>
         <span class="pill">CI/CD</span>
+        <span id="healthPill" class="pill pill-muted">Health: —</span>
       </div>
     </header>
 
@@ -29,21 +31,27 @@
       <!-- LEFT: Inputs -->
       <section class="card">
         <div class="cardHead">
-          <h2>Inputs</h2>
-          <span class="muted">All values are numeric</span>
+          <div>
+            <h2>Inputs</h2>
+            <div class="muted">All values are numeric</div>
+          </div>
+          <div class="headBtns">
+            <button id="btnSample" class="iconBtn" title="Fill a sample input">Sample</button>
+            <button id="btnReset" class="iconBtn" title="Reset to defaults">Reset</button>
+          </div>
         </div>
 
         <div class="formGrid">
           <div class="field">
             <label>Budget (USD)</label>
             <input id="budget" type="number" min="1" step="1" value="50000000" />
-            <div class="hint">Production + marketing spend</div>
+            <div class="hint">Production budget (and optionally marketing if included)</div>
           </div>
 
           <div class="field">
             <label>Popularity</label>
             <input id="popularity" type="number" min="0" step="0.01" value="12.3" />
-            <div class="hint">Public interest proxy (e.g., TMDB)</div>
+            <div class="hint">Public interest proxy (TMDB style)</div>
           </div>
 
           <div class="field">
@@ -55,13 +63,13 @@
           <div class="field">
             <label>Vote Average (0–10)</label>
             <input id="vote_average" type="number" min="0" max="10" step="0.1" value="7.1" />
-            <div class="hint">Early viewer/critic rating</div>
+            <div class="hint">Early viewer rating (post release)</div>
           </div>
 
           <div class="field">
             <label>Vote Count</label>
             <input id="vote_count" type="number" min="0" step="1" value="3400" />
-            <div class="hint">Number of ratings submitted</div>
+            <div class="hint">Number of submitted ratings (post release)</div>
           </div>
 
           <div class="field">
@@ -81,23 +89,29 @@
         </div>
 
         <div class="actions">
-          <button id="btnRevenue" class="btn primary">
-            <span>Predict Revenue</span>
+          <button id="btnAll" class="btn primary wide">
+            <span>Predict All</span>
+            <span class="kbd">POST ×3</span>
+          </button>
+
+          <button id="btnRevenue" class="btn">
+            <span>Revenue</span>
             <span class="kbd">POST</span>
           </button>
 
           <button id="btnClassify" class="btn">
-            <span>Predict Hit/Flop</span>
+            <span>Hit/Flop</span>
             <span class="kbd">POST</span>
           </button>
 
           <button id="btnCluster" class="btn">
-            <span>Predict Cluster</span>
+            <span>Cluster</span>
             <span class="kbd">POST</span>
           </button>
 
-          <button id="btnReset" class="btn ghost" title="Reset to defaults">
-            Reset
+          <button id="btnHealth" class="btn ghost">
+            <span>Check Health</span>
+            <span class="kbd">GET</span>
           </button>
         </div>
 
@@ -107,7 +121,7 @@
           <div class="field">
             <label>Optional API Key (X-API-Key)</label>
             <input id="api_key" type="password" placeholder="Leave empty if not enabled" />
-            <div class="hint">Only required if API_KEY is set on the server</div>
+            <div class="hint">Only required if API key is enabled on the server</div>
           </div>
 
           <div class="field">
@@ -125,13 +139,14 @@
           <div class="statusRow">
             <span id="statusBadge" class="badge idle">Idle</span>
             <button id="btnCopy" class="iconBtn" title="Copy result JSON">Copy</button>
+            <button id="btnDownload" class="iconBtn" title="Download result as JSON">Download</button>
           </div>
         </div>
 
         <div id="resultCards" class="resultCards">
           <div class="resultCard mutedCard">
             <div class="resultTitle">Tip</div>
-            <div class="resultBody">Run a prediction to see structured results here.</div>
+            <div class="resultBody">Press Predict All for a complete output in one click.</div>
           </div>
         </div>
 
