@@ -243,3 +243,76 @@ input:focus{
   from{ opacity:0; transform: translateY(4px); }
   to{ opacity:1; transform: translateY(0); }
 }
+
+/* ===== TMDB Live Autofill ===== */
+.tmdbBox{
+  margin-bottom: 14px;
+  border: 1px solid rgba(33,49,78,.75);
+  background: rgba(11,18,32,.35);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.tmdbHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom: 10px;
+}
+
+.tmdbTitle{
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: .2px;
+}
+
+.tmdbSub{
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.tmdbPill{
+  border-color: rgba(34,211,238,.35);
+}
+
+.tmdbGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 560px){
+  .tmdbGrid{ grid-template-columns: 1fr; }
+}
+
+.tmdbActions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.tmdbSelect{
+  grid-column: 1 / -1;
+}
+
+select{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(11,18,32,.75);
+  color:var(--text);
+  outline:none;
+}
+
+select:focus{
+  border-color: rgba(124,92,255,.75);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.15);
+}
+
+.tmdbNote{
+  margin-top: 10px;
+}
+/* ============================ */

@@ -33,7 +33,8 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
 # Feature engineering
-GENRE_TOP_N = 10  # Top N genres to include as features
+GENRE_TOP_N = 10
+GENRE_FALLBACK = "unknown"# Top N genres to include as features
 MIN_BUDGET = 1000  # Minimum budget threshold
 
 # Model hyperparameters

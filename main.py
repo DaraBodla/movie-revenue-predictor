@@ -8,6 +8,9 @@ from fastapi.security import APIKeyHeader
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from src.utils.tmdb_client import tmdb_search_movie, tmdb_movie_details
+from src.utils.tmdb_mapper import map_tmdb_details_to_model_input
+
 
 
 from pydantic import BaseModel, Field, field_validator
@@ -55,6 +58,7 @@ class MovieInput(BaseModel):
     vote_average: float = Field(..., description="Average rating (0-10)", ge=0, le=10)
     vote_count: float = Field(..., description="Number of votes", ge=0)
     release_month: int = Field(..., description="Release month (1-12)", ge=1, le=12)
+    genres: Optional[str] = None
 
 class RevenuePredictionResponse(BaseModel):
     """Revenue prediction response"""
@@ -224,6 +228,27 @@ async def health_check():
             "clustering": models.clustering_model is not None
         }
     }
+
+
+@app.get("/live/tmdb/search")
+async def live_tmdb_search(q: str, year: int | None = None, api_key: str = Depends(verify_api_key)):
+    results = await tmdb_search_movie(q, year=year)
+    return [
+        {
+            "id": r.get("id"),
+            "title": r.get("title"),
+            "release_date": r.get("release_date"),
+            "popularity": r.get("popularity"),
+            "vote_average": r.get("vote_average"),
+            "vote_count": r.get("vote_count"),
+        }
+        for r in results
+    ]
+
+@app.get("/live/tmdb/{movie_id}/inputs")
+async def live_tmdb_inputs(movie_id: int, api_key: str = Depends(verify_api_key)):
+    details = await tmdb_movie_details(movie_id)
+    return map_tmdb_details_to_model_input(details)
 
 
 @app.post("/predict/revenue", response_model=RevenuePredictionResponse)

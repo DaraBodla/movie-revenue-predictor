@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 import joblib
 from typing import Tuple, Dict, List
 import config
+import re
+from typing import List, Optional
 
 
 class MovieDataPreprocessor:
@@ -17,7 +19,8 @@ class MovieDataPreprocessor:
         self.scaler = StandardScaler()
         self.label_encoders = {}
         self.feature_names = None
-        self.top_genres = None
+        self.top_genres = []
+        self.genre_top_n = 10
         # Learned during training (fit=True) so we can use in inference
         self.release_month_counts_ = None
         
@@ -147,6 +150,18 @@ class MovieDataPreprocessor:
             df['is_sequel'] = df['title'].astype(str).str.contains(r'\d|II|III|IV', regex=True).astype(int)
         else:
             df['is_sequel'] = 0
+            
+        # =========================
+        # Genre Features (Option A)
+        # =========================
+        if "genres" in df.columns:
+            genre_df = self._create_genre_features(df, fit=fit)
+            df = pd.concat([df, genre_df], axis=1)
+        else:
+            # In inference, if genres missing, still keep columns (all zeros)
+            if not fit and getattr(self, "top_genres", None):
+                for g in self.top_genres:
+                    df[f"genre_{g.replace(' ', '_')}"] = 0
 
         return df
     def _get_season(self, month: int) -> str:
@@ -183,6 +198,91 @@ class MovieDataPreprocessor:
         
         return genre_features
     
+    def _parse_genres(self, raw) -> List[str]:
+        """
+        Robust genre parsing:
+        - Handles: "Action, Drama", "Action|Drama", "['Action','Drama']"
+        - Handles list inputs too
+        """
+        if raw is None:
+            return []
+
+        # If already a list
+        if isinstance(raw, list):
+            items = raw
+        else:
+            s = str(raw).strip()
+            if not s or s.lower() == "nan":
+                return []
+
+            # common list-like string: "['Action', 'Drama']"
+            if s.startswith("[") and s.endswith("]"):
+                s = s.strip("[]")
+                s = s.replace("'", "").replace('"', "")
+
+            # split by common separators: comma or pipe
+            items = re.split(r"[,\|/]+", s)
+
+        out = []
+        for g in items:
+            g = str(g).strip().lower()
+            if g:
+                out.append(g)
+        return out
+
+
+    def _fit_top_genres(self, df) -> None:
+        """
+        Learn top-N genres from training data.
+        """
+        from collections import Counter
+        counts = Counter()
+
+        if "genres" not in df.columns:
+            self.top_genres = []
+            return
+
+        for raw in df["genres"].fillna(""):
+            for g in self._parse_genres(raw):
+                counts[g] += 1
+
+        top_n = getattr(self, "genre_top_n", None)
+        if top_n is None:
+            # fallback to config if your class doesn't store it
+            try:
+                from config import GENRE_TOP_N
+                top_n = GENRE_TOP_N
+            except Exception:
+                top_n = 10
+
+        self.top_genres = [g for g, _ in counts.most_common(int(top_n))]
+
+
+    def _create_genre_features(self, df, fit: bool = False):
+        """
+        Create multi-hot genre columns: genre_action, genre_drama, ...
+        If fit=True, learns top genres first.
+        """
+        import pandas as pd
+
+        if fit:
+            self._fit_top_genres(df)
+
+        # If we don't have top genres, return empty DF
+        if not getattr(self, "top_genres", None):
+            return pd.DataFrame(index=df.index)
+
+        # Build output DF
+        genre_cols = {f"genre_{g.replace(' ', '_')}": [] for g in self.top_genres}
+
+        for raw in df.get("genres", pd.Series([""] * len(df))).fillna(""):
+            gs = set(self._parse_genres(raw))
+            for g in self.top_genres:
+                col = f"genre_{g.replace(' ', '_')}"
+                genre_cols[col].append(1 if g in gs else 0)
+
+        return pd.DataFrame(genre_cols, index=df.index)
+    
     def create_target_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         """Create classification labels for 'hit' vs 'flop'.
 
@@ -211,13 +311,18 @@ class MovieDataPreprocessor:
         df = df.copy()
 
         # Base predictors from the dataset
-        base_features = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count', 'release_month']
+        base_features = ["budget", "popularity", "runtime", "vote_average", "vote_count", "release_month"]
 
-        # Engineered features created by engineer_features()
-        engineered = ['log_budget', 'log_vote_count', 'popularity_score', 'vote_density', 'popularity_per_budget', 'month_sin', 'month_cos']
+        engineered_features = [
+            "log_budget", "log_vote_count", "popularity_score", "vote_density",
+            "popularity_per_budget", "month_sin", "month_cos"
+        ]
 
-        feature_cols = base_features + engineered
+        genre_features = []
+        if getattr(self, "top_genres", None):
+            genre_features = [f"genre_{g.replace(' ', '_')}" for g in self.top_genres]
 
+        feature_cols = base_features + engineered_features + genre_features
         missing_features = [c for c in feature_cols if c not in df.columns]
         if missing_features:
             raise ValueError(f"Missing required feature columns after feature engineering: {missing_features}")

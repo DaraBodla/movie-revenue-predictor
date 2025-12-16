@@ -5,11 +5,10 @@ const defaults = {
   vote_average: 7.1,
   vote_count: 3400,
   release_month: 7,
+  genres: "Action, Adventue",
 };
 
 function $(id) { return document.getElementById(id); }
-
-let lastResult = null;
 
 function toast(msg) {
   const t = $("toast");
@@ -33,19 +32,67 @@ function buildPayload() {
     vote_average: readNumber("vote_average"),
     vote_count: readNumber("vote_count"),
     release_month: readNumber("release_month"),
+    genres: document.getElementById("genres").value.trim() || null,
   };
 }
 
 function getHeaders() {
   const headers = { "Content-Type": "application/json" };
-  const apiKey = $("api_key")?.value?.trim();
+  const apiKey = $("api_key").value?.trim();
   if (apiKey) headers["X-API-Key"] = apiKey;
   return headers;
 }
 
 function baseUrl() {
-  const b = $("base_url")?.value?.trim();
+  const b = $("base_url").value.trim();
   return b ? b.replace(/\/$/, "") : "";
+}
+
+async function callApi(path, payload) {
+  const url = baseUrl() + path;
+  const t0 = performance.now();
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const ms = Math.round(performance.now() - t0);
+  $("latency").textContent = `latency: ${ms}ms`;
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+  if (!res.ok) {
+    const msg = data?.detail || data?.message || JSON.stringify(data);
+    throw new Error(`${res.status} ${res.statusText}: ${msg}`);
+  }
+  return data;
+}
+
+async function callGet(path) {
+  const url = baseUrl() + path;
+  const t0 = performance.now();
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+
+  const ms = Math.round(performance.now() - t0);
+  $("latency").textContent = `latency: ${ms}ms`;
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+  if (!res.ok) {
+    const msg = data?.detail || data?.message || JSON.stringify(data);
+    throw new Error(`${res.status} ${res.statusText}: ${msg}`);
+  }
+  return data;
 }
 
 function setStatus(kind, label) {
@@ -55,13 +102,43 @@ function setStatus(kind, label) {
 }
 
 function setBusy(isBusy) {
-  ["btnAll","btnRevenue","btnClassify","btnCluster","btnReset","btnCopy","btnDownload","btnHealth","btnSample"]
-    .filter(Boolean)
-    .forEach(id => $(id) && ($(id).disabled = isBusy));
+  [
+    "btnRevenue","btnClassify","btnCluster","btnReset","btnCopy",
+    "btnTmdbSearch","btnTmdbFill"
+  ].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = isBusy;
+  });
 }
 
 function setOutput(obj) {
   $("output").textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+}
+
+function renderCards(endpoint, data) {
+  const wrap = $("resultCards");
+  const cards = [];
+
+  if (endpoint === "/predict/revenue") {
+    cards.push(card("Revenue", data.predicted_revenue_formatted || String(data.predicted_revenue)));
+    if (data.confidence_interval) {
+      cards.push(card("Confidence Interval", JSON.stringify(data.confidence_interval)));
+    }
+    cards.push(card("Model", data.model_used || "unknown"));
+  } else if (endpoint === "/predict/classification") {
+    cards.push(card("Label", data.prediction_label ?? (data.is_hit ? "Hit" : "Flop")));
+    cards.push(card("Hit Probability", pct(data.hit_probability)));
+    cards.push(card("Flop Probability", pct(data.flop_probability)));
+  } else if (endpoint === "/predict/cluster") {
+    cards.push(card("Cluster ID", String(data.cluster_id)));
+    cards.push(card("Cluster Label", data.cluster_label || `Cluster ${data.cluster_id}`));
+    if (data.cluster_profile) cards.push(card("Profile", JSON.stringify(data.cluster_profile)));
+  } else {
+    cards.push(card("Result", JSON.stringify(data)));
+  }
+
+  wrap.innerHTML = "";
+  cards.forEach(c => wrap.appendChild(c));
 }
 
 function pct(x) {
@@ -86,126 +163,20 @@ function escapeHtml(s) {
     .replaceAll("'","&#039;");
 }
 
-function clearCards() {
-  const wrap = $("resultCards");
-  wrap.innerHTML = "";
-  return wrap;
-}
-
-function renderRevenue(data) {
-  const wrap = clearCards();
-  wrap.appendChild(card("Predicted Revenue", data.predicted_revenue_formatted || String(data.predicted_revenue)));
-  if (data.confidence_interval) wrap.appendChild(card("Confidence Interval", JSON.stringify(data.confidence_interval)));
-  wrap.appendChild(card("Model Used", data.model_used || "unknown"));
-}
-
-function renderClassification(data) {
-  const wrap = clearCards();
-  wrap.appendChild(card("Label", data.prediction_label ?? (data.is_hit ? "Hit" : "Flop")));
-  wrap.appendChild(card("Hit Probability", pct(data.hit_probability)));
-  wrap.appendChild(card("Flop Probability", pct(data.flop_probability)));
-}
-
-function renderCluster(data) {
-  const wrap = clearCards();
-  wrap.appendChild(card("Cluster ID", String(data.cluster_id)));
-  wrap.appendChild(card("Cluster Label", data.cluster_label || `Cluster ${data.cluster_id}`));
-  if (data.cluster_profile) wrap.appendChild(card("Cluster Profile", JSON.stringify(data.cluster_profile)));
-}
-
-function renderAll(all) {
-  const wrap = clearCards();
-
-  if (all.revenue) {
-    wrap.appendChild(card("Predicted Revenue", all.revenue.predicted_revenue_formatted || String(all.revenue.predicted_revenue)));
-    wrap.appendChild(card("Revenue Model", all.revenue.model_used || "unknown"));
-  }
-
-  if (all.classification) {
-    wrap.appendChild(card("Hit or Flop", all.classification.prediction_label ?? (all.classification.is_hit ? "Hit" : "Flop")));
-    wrap.appendChild(card("Hit Probability", pct(all.classification.hit_probability)));
-  }
-
-  if (all.cluster) {
-    wrap.appendChild(card("Cluster", `${all.cluster.cluster_label || "Cluster"} (ID ${all.cluster.cluster_id})`));
-    if (all.cluster.cluster_profile) wrap.appendChild(card("Cluster Profile", JSON.stringify(all.cluster.cluster_profile)));
-  }
-}
-
-async function callApi(method, path, payload) {
-  const url = baseUrl() + path;
-  const t0 = performance.now();
-
-  const opts = { method, headers: getHeaders() };
-  if (payload && method !== "GET") opts.body = JSON.stringify(payload);
-
-  const res = await fetch(url, opts);
-  const ms = Math.round(performance.now() - t0);
-  $("latency").textContent = `latency: ${ms}ms`;
-
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
-  if (!res.ok) {
-    const msg = data?.detail || data?.message || JSON.stringify(data);
-    throw new Error(`${res.status} ${res.statusText}: ${msg}`);
-  }
-  return data;
-}
-
 async function handle(endpoint) {
   try {
     setBusy(true);
     setStatus("busy", "Running…");
     const payload = buildPayload();
-    const data = await callApi("POST", endpoint, payload);
-
-    lastResult = data;
-
+    const data = await callApi(endpoint, payload);
     setStatus("ok", "Success");
-    if (endpoint === "/predict/revenue") renderRevenue(data);
-    else if (endpoint === "/predict/classification") renderClassification(data);
-    else if (endpoint === "/predict/cluster") renderCluster(data);
-    else renderAll(data);
-
+    renderCards(endpoint, data);
     setOutput(data);
   } catch (err) {
     setStatus("err", "Error");
     const obj = { error: String(err) };
-    const wrap = clearCards();
-    wrap.appendChild(card("Error", obj.error));
-    lastResult = obj;
-    setOutput(obj);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function predictAll() {
-  try {
-    setBusy(true);
-    setStatus("busy", "Running…");
-    const payload = buildPayload();
-
-    const [revenue, classification, cluster] = await Promise.all([
-      callApi("POST", "/predict/revenue", payload),
-      callApi("POST", "/predict/classification", payload),
-      callApi("POST", "/predict/cluster", payload),
-    ]);
-
-    const all = { revenue, classification, cluster };
-    lastResult = all;
-
-    setStatus("ok", "Success");
-    renderAll(all);
-    setOutput(all);
-  } catch (err) {
-    setStatus("err", "Error");
-    const obj = { error: String(err) };
-    const wrap = clearCards();
-    wrap.appendChild(card("Error", obj.error));
-    lastResult = obj;
+    $("resultCards").innerHTML = "";
+    $("resultCards").appendChild(card("Error", obj.error));
     setOutput(obj);
   } finally {
     setBusy(false);
@@ -214,31 +185,18 @@ async function predictAll() {
 
 function resetDefaults() {
   Object.entries(defaults).forEach(([k,v]) => $(k).value = v);
-  if ($("api_key")) $("api_key").value = "";
-  if ($("base_url")) $("base_url").value = "";
+  $("api_key").value = "";
   $("latency").textContent = "";
+  $("tmdb_query").value = "";
+  $("tmdb_year").value = "";
+  $("tmdb_results").innerHTML = `<option value="">Search to load results…</option>`;
+  $("btnTmdbFill").disabled = true;
+
   setStatus("idle", "Idle");
-
-  const wrap = clearCards();
-  const tip = document.createElement("div");
-  tip.className = "resultCard mutedCard";
-  tip.innerHTML = `<div class="resultTitle">Tip</div>
-                   <div class="resultBody">Press Predict All for a complete output in one click.</div>`;
-  wrap.appendChild(tip);
-
+  $("resultCards").innerHTML = "";
+  $("resultCards").appendChild(card("Tip", "Run a prediction to see structured results here."));
   setOutput("Run a prediction to see results…");
-  lastResult = null;
   toast("Reset done");
-}
-
-function fillSample() {
-  $("budget").value = 150000000;
-  $("popularity").value = 65.4;
-  $("runtime").value = 160;
-  $("vote_average").value = 7.8;
-  $("vote_count").value = 12000;
-  $("release_month").value = 12;
-  toast("Sample filled");
 }
 
 async function copyOutput() {
@@ -250,32 +208,6 @@ async function copyOutput() {
   }
 }
 
-function downloadJSON() {
-  if (!lastResult) return toast("Nothing to download yet");
-  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "movie_intelligence_result.json";
-  a.click();
-  URL.revokeObjectURL(url);
-  toast("Downloaded JSON");
-}
-
-async function checkHealth() {
-  try {
-    const data = await callApi("GET", "/health");
-    const pill = $("healthPill");
-    pill.textContent = `Health: ${data.status || "ok"}`;
-    pill.classList.remove("pill-muted");
-    toast("Health OK");
-  } catch (e) {
-    const pill = $("healthPill");
-    pill.textContent = "Health: error";
-    toast("Health check failed");
-  }
-}
-
 function setupSegments() {
   const buttons = Array.from(document.querySelectorAll(".segBtn"));
   buttons.forEach(b => {
@@ -284,26 +216,130 @@ function setupSegments() {
       b.classList.add("active");
       const mode = b.dataset.mode;
 
-      // light UX: highlight relevant buttons
-      $("btnRevenue")?.classList.toggle("primary", mode === "revenue");
-      $("btnClassify")?.classList.toggle("primary", mode === "classify");
-      $("btnCluster")?.classList.toggle("primary", mode === "cluster");
-      $("btnAll")?.classList.toggle("primary", mode === "all");
+      $("btnRevenue").classList.toggle("primary", mode === "revenue" || mode === "all");
+      $("btnClassify").classList.toggle("primary", mode === "classify");
+      $("btnCluster").classList.toggle("primary", mode === "cluster");
     });
   });
 }
 
-// Wiring
-$("btnAll").addEventListener("click", predictAll);
+/* =========================
+   TMDB LIVE AUTOFILL
+   ========================= */
+
+let tmdbCache = []; // store latest search results
+
+function formatTmdbOption(r) {
+  const title = r.title || "Untitled";
+  const date = r.release_date ? `(${r.release_date})` : "(no date)";
+  const votes = (typeof r.vote_count === "number") ? ` • votes: ${r.vote_count}` : "";
+  return `${title} ${date}${votes}`;
+}
+
+async function tmdbSearch() {
+  const q = $("tmdb_query").value.trim();
+  const yearRaw = $("tmdb_year").value.trim();
+  const year = yearRaw ? Number(yearRaw) : null;
+
+  if (!q) {
+    toast("Enter a movie title");
+    return;
+  }
+
+  try {
+    setBusy(true);
+    setStatus("busy", "Searching TMDB…");
+
+    const qs = new URLSearchParams({ q });
+    if (year && !Number.isNaN(year)) qs.set("year", String(year));
+
+    const data = await callGet(`/live/tmdb/search?${qs.toString()}`);
+    tmdbCache = Array.isArray(data) ? data : [];
+
+    const sel = $("tmdb_results");
+    sel.innerHTML = "";
+
+    if (tmdbCache.length === 0) {
+      sel.innerHTML = `<option value="">No results found</option>`;
+      $("btnTmdbFill").disabled = true;
+      setStatus("idle", "Idle");
+      return;
+    }
+
+    sel.appendChild(new Option("Select a result…", ""));
+    tmdbCache.forEach((r) => {
+      const opt = new Option(formatTmdbOption(r), String(r.id));
+      sel.appendChild(opt);
+    });
+
+    $("btnTmdbFill").disabled = true;
+    setStatus("ok", `Found ${tmdbCache.length}`);
+    toast(`Found ${tmdbCache.length} results`);
+  } catch (err) {
+    setStatus("err", "TMDB error");
+    setOutput({ error: String(err) });
+    toast("TMDB search failed");
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function tmdbAutofill() {
+  const id = $("tmdb_results").value;
+  if (!id) {
+    toast("Select a TMDB result first");
+    return;
+  }
+
+  try {
+    setBusy(true);
+    setStatus("busy", "Loading TMDB details…");
+
+    const inputs = await callGet(`/live/tmdb/${encodeURIComponent(id)}/inputs`);
+
+    // Fill ONLY if field exists (best effort)
+    const fields = ["budget","popularity","runtime","vote_average","vote_count","release_month"];
+    fields.forEach((f) => {
+      if (inputs && inputs[f] !== undefined && inputs[f] !== null) {
+        $(f).value = inputs[f];
+      }
+    });
+
+    setStatus("ok", "Autofilled");
+    setOutput({
+      message: "Autofilled inputs from TMDB",
+      tmdb: inputs
+    });
+    toast("Autofill complete");
+  } catch (err) {
+    setStatus("err", "Autofill error");
+    setOutput({ error: String(err) });
+    toast("Autofill failed");
+  } finally {
+    setBusy(false);
+  }
+}
+
+function onTmdbSelectionChange() {
+  const hasSelection = Boolean($("tmdb_results").value);
+  $("btnTmdbFill").disabled = !hasSelection;
+}
+
+/* ========================= */
+
 $("btnRevenue").addEventListener("click", () => handle("/predict/revenue"));
 $("btnClassify").addEventListener("click", () => handle("/predict/classification"));
 $("btnCluster").addEventListener("click", () => handle("/predict/cluster"));
 $("btnReset").addEventListener("click", resetDefaults);
-$("btnSample").addEventListener("click", fillSample);
 $("btnCopy").addEventListener("click", copyOutput);
-$("btnDownload").addEventListener("click", downloadJSON);
-$("btnHealth").addEventListener("click", checkHealth);
+
+// TMDB hooks
+$("btnTmdbSearch").addEventListener("click", tmdbSearch);
+$("btnTmdbFill").addEventListener("click", tmdbAutofill);
+$("tmdb_results").addEventListener("change", onTmdbSelectionChange);
+$("tmdb_query").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") tmdbSearch();
+});
 
 setupSegments();
 resetDefaults();
-checkHealth();

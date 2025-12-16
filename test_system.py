@@ -24,6 +24,7 @@ def sample_df(n: int = 50) -> pd.DataFrame:
     vote_count = rng.integers(0, 50_000, size=n)
     # Synthetic revenue correlated with budget and popularity
     revenue = budget * (0.5 + rng.random(size=n) * 3.0) + popularity * 100_000
+    genres = "Action, Adventure"
     return pd.DataFrame({
         "budget": budget.astype(float),
         "popularity": popularity.astype(float),
@@ -32,6 +33,7 @@ def sample_df(n: int = 50) -> pd.DataFrame:
         "vote_count": vote_count.astype(float),
         "release_month": rng.integers(1, 13, size=n).astype(int),
         "revenue": revenue.astype(float),
+        "genres": genres.astype(str)
     })
 
 
