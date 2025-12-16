@@ -488,13 +488,14 @@ elif page == "Predict Revenue":
                     "popularity": popularity,
                     "vote_average": vote_average,
                     "vote_count": vote_count,
-                    "genres": genres
+                    "genres": ",".join(genres)
                 }
                 
                 # Mock prediction (replace with actual API call)
                 try:
+                    # Revenue prediction endpoint (exists)
                     response = requests.post(
-                        f"{API_BASE_URL}/predict",
+                        f"{API_BASE_URL}/predict/revenue",
                         json=input_data,
                         timeout=15
                     )
@@ -502,6 +503,7 @@ elif page == "Predict Revenue":
                     result = response.json()
 
                     st.success("✅ Prediction completed successfully!")
+
 
                     
                     # Display results

@@ -3,7 +3,7 @@ FastAPI Application for Movie Intelligence System
 Provides endpoints for all ML tasks
 """
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.security import APIKeyHeader
 from src.utils.tmdb_client import tmdb_search_movie, tmdb_movie_details
 from src.utils.tmdb_mapper import map_tmdb_details_to_model_input
@@ -18,9 +18,10 @@ import joblib
 from datetime import datetime
 import io
 import os
-
+import json
 import config
 from src.utils.logging_config import setup_logging
+from src.monitoring.live_log import log_live_input
 
 logger = setup_logging()
 
@@ -233,6 +234,7 @@ async def live_tmdb_search(q: str, year: int | None = None, api_key: str = Depen
             "popularity": r.get("popularity"),
             "vote_average": r.get("vote_average"),
             "vote_count": r.get("vote_count"),
+            "genres": r.get("genres"),
         }
         for r in results
     ]
@@ -250,6 +252,7 @@ async def predict_revenue(
     movie: MovieInput,
     api_key: str = Depends(verify_api_key)
 ):
+    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
     """Predict movie revenue for a single movie"""
     if models is None or models.regression_model is None:
         raise HTTPException(status_code=503, detail="Regression model not loaded")
@@ -278,6 +281,7 @@ async def predict_revenue(
 
 @app.post("/predict/classification", response_model=ClassificationResponse)
 async def predict_classification(movie: MovieInput):
+    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
     """Predict if movie will be a hit or flop"""
     if models is None or models.classification_model is None:
         raise HTTPException(status_code=503, detail="Classification model not loaded")
@@ -307,6 +311,7 @@ async def predict_classification(movie: MovieInput):
 
 @app.post("/predict/cluster", response_model=ClusterResponse)
 async def predict_cluster(movie: MovieInput):
+    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
     """Assign movie to a performance cluster"""
     if models is None or models.clustering_model is None:
         raise HTTPException(status_code=503, detail="Clustering model not loaded")
@@ -409,6 +414,23 @@ async def get_timeseries_analysis():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+    
+DRIFT_DIR = os.path.join("reports", "drift")
+DRIFT_HTML = os.path.join(DRIFT_DIR, "drift_report.html")
+DRIFT_JSON = os.path.join(DRIFT_DIR, "drift_summary.json")
+
+@app.get("/drift/report", response_class=HTMLResponse)
+def get_drift_report():
+    if not os.path.exists(DRIFT_HTML):
+        return HTMLResponse("<h3>Drift report not found. Run drift_monitor.py first.</h3>", status_code=404)
+    return FileResponse(DRIFT_HTML)
+
+@app.get("/drift/summary")
+def get_drift_summary():
+    if not os.path.exists(DRIFT_JSON):
+        return {"detail": "Drift summary not found. Run drift_monitor.py first."}
+    with open(DRIFT_JSON, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 @app.get("/models/info")
