@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Streamlit UI
+  streamlit:
+    build: .
+    container_name: movie-intelligence-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - movie-net
+
+  # FastAPI Backend (optional - add your API service here)
+  api:
+    image: your-api-image:latest  # Replace with your actual API image
+    container_name: movie-intelligence-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_VERSION=v1.2.0
+      - DATABASE_URL=postgresql://user:pass@db:5432/movies
+    restart: unless-stopped
+    networks:
+      - movie-net
+
+  # PostgreSQL Database (optional)
+  db:
+    image: postgres:15-alpine
+    container_name: movie-intelligence-db
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=movies
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - movie-net
+
+networks:
+  movie-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

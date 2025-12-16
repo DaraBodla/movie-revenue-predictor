@@ -5,9 +5,6 @@ Provides endpoints for all ML tasks
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from src.utils.tmdb_client import tmdb_search_movie, tmdb_movie_details
 from src.utils.tmdb_mapper import map_tmdb_details_to_model_input
 
@@ -104,8 +101,6 @@ app = FastAPI(
     description=config.API_DESCRIPTION
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
 
 # Optional rate limiting (enabled if slowapi is installed)
@@ -182,9 +177,6 @@ def _maybe_limit(rule: str):
     return _decorator
 
 
-@app.get("/ui", response_class=HTMLResponse)
-async def ui(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/", response_model=HealthResponse)
