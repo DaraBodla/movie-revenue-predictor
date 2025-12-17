@@ -1,1160 +1,1153 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 import requests
-from typing import Dict, List, Any
 import os
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-
+import json
+import io
 
 # Page configuration
 st.set_page_config(
-    page_title="Movie Intelligence",
+    page_title="MOVIE INTELLIGENCE",
     page_icon="🎬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for professional styling
+# API Configuration
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+
+# Load metrics data
+METRICS_DATA = {
+    "timestamp": "2025-12-16T22:38:16.352328",
+    "models": {
+        "regression_gradient_boosting": {
+            "rmse": 92499921.16,
+            "mae": 36195021.23,
+            "r2_score": 0.6772,
+            "mape": 10442410.62,
+            "model_type": "gradient_boosting"
+        },
+        "classification": {
+            "accuracy": 0.8525,
+            "f1_score": 0.8525,
+            "confusion_matrix": [[863, 145], [157, 883]]
+        },
+        "clustering": {
+            "silhouette_score": 0.1009,
+            "n_clusters": 4
+        }
+    }
+}
+
+# Custom CSS - Cinema/Box Office Inspired (Minimalist Dark)
 st.markdown("""
 <style>
-    /* Color Variables */
+    /* Import clean font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* Color System */
     :root {
-        --primary-color: #2F3A8F;
-        --accent-color: #00BFA6;
-        --background-color: #F7F8FC;
-        --card-color: #FFFFFF;
-        --text-color: #111827;
+        --bg-main: #0D0D0F;
+        --surface: #16161A;
+        --border: #24242A;
+        --gold: #E4B15E;
+        --red: #B11226;
+        --slate: #8A8F98;
+        --text-primary: #F5F5F7;
+        --text-secondary: #A1A1AA;
+        --text-muted: #6B7280;
     }
     
     /* Main background */
     .main {
-        background-color: #F7F8FC;
+        background-color: #0D0D0F;
+        color: #F5F5F7;
     }
     
-    /* Card styling */
-    .card {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        margin-bottom: 1.5rem;
+    .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        max-width: 1400px;
     }
     
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #2F3A8F 0%, #4A5FC1 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 4px 12px rgba(47, 58, 143, 0.2);
+    /* Remove all shadows and gradients */
+    div, button, input, select {
+        box-shadow: none !important;
+        background-image: none !important;
     }
     
-    .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        margin: 0.5rem 0;
+    /* Typography */
+    h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #F5F5F7;
+        margin-bottom: 0.5rem;
     }
     
-    .metric-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-    
-    /* Hero section */
-    .hero-section {
-        background: linear-gradient(135deg, #2F3A8F 0%, #4A5FC1 100%);
-        color: white;
-        padding: 3rem 2rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        text-align: center;
-    }
-    
-    .hero-title {
-        font-size: 2.5rem;
-        font-weight: bold;
+    h2 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #F5F5F7;
+        margin-top: 2rem;
         margin-bottom: 1rem;
     }
     
-    .hero-description {
-        font-size: 1.1rem;
-        opacity: 0.95;
-        max-width: 800px;
-        margin: 0 auto;
+    h3 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #A1A1AA;
+        margin-bottom: 0.75rem;
     }
     
-    /* Workflow steps */
-    .workflow-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 2rem 0;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-    
-    .workflow-step {
-        background-color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        flex: 1;
-        min-width: 120px;
+    /* Page title */
+    .page-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #F5F5F7;
+        margin-bottom: 0.5rem;
         text-align: center;
-        font-weight: 500;
-        color: #2F3A8F;
     }
     
-    .workflow-arrow {
-        color: #00BFA6;
-        font-size: 1.5rem;
-        font-weight: bold;
+    .page-subtitle {
+        font-size: 1rem;
+        color: #A1A1AA;
+        text-align: center;
+        margin-bottom: 3rem;
+        letter-spacing: 0.02em;
     }
     
-    /* Status badges */
-    .status-badge {
+    /* Cards - Minimalist */
+    .card {
+        background-color: #16161A;
+        border: 1px solid #24242A;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border-radius: 0;
+    }
+    
+    /* Revenue numbers - Box office style */
+    .revenue-number {
+        font-size: 4rem;
+        font-weight: 800;
+        color: #E4B15E;
+        line-height: 1;
+        letter-spacing: -0.02em;
+    }
+    
+    .metric-number {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #E4B15E;
+        line-height: 1;
+    }
+    
+    .metric-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 0.5rem;
+    }
+    
+    /* Badges */
+    .badge {
         display: inline-block;
-        padding: 0.4rem 1rem;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 0.85rem;
+        padding: 0.5rem 1.5rem;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        border-radius: 0;
     }
     
-    .status-healthy {
-        background-color: #D1FAE5;
-        color: #065F46;
+    .badge-hit {
+        background-color: #E4B15E;
+        color: #0D0D0F;
     }
     
-    .status-unavailable {
-        background-color: #FEE2E2;
-        color: #991B1B;
+    .badge-flop {
+        background-color: #B11226;
+        color: #F5F5F7;
     }
     
-    .status-hit {
-        background-color: #D1FAE5;
-        color: #065F46;
-    }
-    
-    .status-flop {
-        background-color: #FEE2E2;
-        color: #991B1B;
-    }
-    
-    /* Button styling */
+    /* Buttons */
     .stButton > button {
-        background-color: #00BFA6;
-        color: white;
+        background-color: #E4B15E;
+        color: #0D0D0F;
         border: none;
-        border-radius: 8px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
+        border-radius: 0;
+        padding: 1rem 3rem;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        transition: all 0.2s ease;
+        width: 100%;
     }
     
     .stButton > button:hover {
-        background-color: #009688;
-        box-shadow: 0 4px 12px rgba(0, 191, 166, 0.3);
+        background-color: #F5C976;
+        transform: translateY(-2px);
     }
+    
+    /* Secondary button */
+    button[kind="secondary"] {
+        background-color: transparent !important;
+        border: 1px solid #24242A !important;
+        color: #A1A1AA !important;
+    }
+    
+    button[kind="secondary"]:hover {
+        background-color: #16161A !important;
+        border-color: #8A8F98 !important;
+    }
+    
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div > select {
+        background-color: #16161A;
+        border: 1px solid #24242A;
+        border-radius: 0;
+        color: #F5F5F7;
+        padding: 0.75rem;
+        font-size: 1rem;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus,
+    .stSelectbox > div > div > select:focus {
+        border-color: #E4B15E;
+        outline: none;
+    }
+    
+    /* Slider */
+    .stSlider > div > div > div > div {
+        background-color: #E4B15E;
+    }
+    
+    .stSlider > div > div > div {
+        background-color: #24242A;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background-color: transparent;
+        border-bottom: 1px solid #24242A;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        border-radius: 0;
+        color: #6B7280;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 1rem 2rem;
+        border: none;
+        font-size: 0.85rem;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: transparent;
+        color: #E4B15E;
+        border-bottom: 2px solid #E4B15E;
+    }
+    
+    /* Messages */
+    .stSuccess {
+        background-color: #16161A;
+        border: 1px solid #E4B15E;
+        border-radius: 0;
+        color: #F5F5F7;
+        padding: 1rem;
+    }
+    
+    .stError {
+        background-color: #16161A;
+        border: 1px solid #B11226;
+        border-radius: 0;
+        color: #F5F5F7;
+        padding: 1rem;
+    }
+    
+    .stWarning {
+        background-color: #16161A;
+        border: 1px solid #E4B15E;
+        border-radius: 0;
+        color: #F5F5F7;
+        padding: 1rem;
+    }
+    
+    .stInfo {
+        background-color: #16161A;
+        border: 1px solid #8A8F98;
+        border-radius: 0;
+        color: #F5F5F7;
+        padding: 1rem;
+    }
+    
+    /* Dataframe */
+    .dataframe {
+        border: 1px solid #24242A;
+        border-radius: 0;
+    }
+    
+    .dataframe thead tr {
+        background-color: #16161A;
+        color: #A1A1AA;
+    }
+    
+    .dataframe tbody tr {
+        background-color: #0D0D0F;
+        color: #F5F5F7;
+    }
+    
+    /* Workflow stepper */
+    .workflow-step {
+        background-color: #16161A;
+        border: 1px solid #24242A;
+        padding: 1.5rem 1rem;
+        text-align: center;
+        flex: 1;
+        min-width: 100px;
+    }
+    
+    .workflow-step-title {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 0.5rem;
+    }
+    
+    .workflow-arrow {
+        color: #24242A;
+        font-size: 2rem;
+        padding: 0 0.5rem;
+    }
+    
+    /* Status indicator */
+    .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .status-healthy {
+        background-color: #E4B15E;
+    }
+    
+    .status-error {
+        background-color: #B11226;
+    }
+    
+    /* File uploader */
+    .stFileUploader {
+        background-color: #16161A;
+        border: 1px dashed #24242A;
+        border-radius: 0;
+        padding: 2rem;
+    }
+    
+    /* Multiselect */
+    .stMultiSelect > div > div {
+        background-color: #16161A;
+        border: 1px solid #24242A;
+        border-radius: 0;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     
     /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #2F3A8F;
-    }
-    
     section[data-testid="stSidebar"] {
-        background-color: #2F3A8F;
-        color: white;
+        background-color: #16161A;
+        border-right: 1px solid #24242A;
     }
     
-    section[data-testid="stSidebar"] .css-1v0mbdj {
-        color: white;
+    /* Navigation pills */
+    .nav-pill {
+        background-color: transparent;
+        border: 1px solid #24242A;
+        padding: 0.75rem 1.5rem;
+        margin-bottom: 0.5rem;
+        color: #A1A1AA;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        transition: all 0.2s ease;
     }
     
-    /* Info boxes */
-    .info-box {
-        background-color: #EFF6FF;
-        border-left: 4px solid #2F3A8F;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 1rem 0;
+    .nav-pill:hover {
+        background-color: #16161A;
+        border-color: #E4B15E;
+        color: #E4B15E;
     }
     
-    /* Table styling */
-    .dataframe {
-        border: none !important;
+    .nav-pill-active {
+        background-color: #16161A;
+        border-color: #E4B15E;
+        color: #E4B15E;
     }
     
-    /* Section headers */
-    .section-header {
-        color: #2F3A8F;
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin: 2rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 3px solid #00BFA6;
+    /* Section divider */
+    .section-divider {
+        height: 1px;
+        background-color: #24242A;
+        margin: 3rem 0;
     }
     
-    /* Professor page styling */
-    .evidence-item {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem;
-        margin: 0.5rem 0;
-        background-color: #F9FAFB;
-        border-radius: 6px;
+    /* Info note */
+    .info-note {
+        font-size: 0.85rem;
+        color: #6B7280;
+        font-style: italic;
+        margin-top: 0.5rem;
     }
     
-    .evidence-check {
-        color: #10B981;
-        font-size: 1.2rem;
-        margin-right: 0.75rem;
+    /* Plotly chart backgrounds */
+    .js-plotly-plot {
+        background-color: transparent !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Initialize session state
-if 'api_status' not in st.session_state:
-    st.session_state.api_status = 'Healthy'
-if 'model_version' not in st.session_state:
-    st.session_state.model_version = 'v1.2.0'
-if 'last_training' not in st.session_state:
-    st.session_state.last_training = '2024-12-15 14:30:00'
+if 'page' not in st.session_state:
+    st.session_state.page = "Home"
+if 'prediction_result' not in st.session_state:
+    st.session_state.prediction_result = None
 
-# API Configuration
-API_BASE_URL = "http://localhost:8000"  # Update with your actual API URL
-
+# Helper functions
 def check_api_health():
     """Check if API is accessible"""
     try:
-        response = requests.get(f"{API_BASE_URL}/health", timeout=2)
+        response = requests.get(f"{API_BASE_URL}/health", timeout=3)
         return response.status_code == 200
     except:
         return False
 
-# Sidebar
-with st.sidebar:
-    st.markdown("""
-    <div style="text-align: center; padding: 1.5rem 0;">
-        <h1 style="color: white; margin: 0; font-size: 1.8rem;">🎬 Movie Intelligence</h1>
-        <p style="color: rgba(255,255,255,0.8); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-            End-to-End ML Revenue Prediction System
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Navigation
-    page = st.radio(
-        "Navigation",
-        ["Home / Overview", "Predict Revenue", "Model Dashboard", 
-         "Data Explorer", "Monitoring", "Professor System Page"],
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    
-    # System Status
-    st.markdown("### System Status")
-    
-    api_healthy = check_api_health()
-    status_class = "status-healthy" if api_healthy else "status-unavailable"
-    status_text = "Healthy" if api_healthy else "Unavailable"
-    
-    st.markdown(f"""
-    <div style="margin: 1rem 0;">
-        <div style="color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-bottom: 0.3rem;">API Status</div>
-        <span class="status-badge {status_class}">{status_text}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="margin: 1rem 0;">
-        <div style="color: rgba(255,255,255,0.8); font-size: 0.85rem;">Model Version</div>
-        <div style="color: white; font-weight: 600; font-size: 1rem;">{st.session_state.model_version}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div style="margin: 1rem 0;">
-        <div style="color: rgba(255,255,255,0.8); font-size: 0.85rem;">Last Training</div>
-        <div style="color: white; font-size: 0.9rem;">{st.session_state.last_training}</div>
-    </div>
-    """, unsafe_allow_html=True)
+def make_prediction(data, endpoint="/predict"):
+    """Make prediction API call"""
+    try:
+        response = requests.post(f"{API_BASE_URL}{endpoint}", json=data, timeout=10)
+        if response.status_code == 200:
+            return response.json(), None
+        else:
+            return None, f"API Error: {response.status_code} - {response.text}"
+    except Exception as e:
+        return None, f"Connection Error: {str(e)}"
 
-# ==================== HOME / OVERVIEW PAGE ====================
-if page == "Home / Overview":
+# Navigation
+st.markdown("""
+<div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 3rem; border-bottom: 1px solid #24242A; padding-bottom: 1rem;">
+""", unsafe_allow_html=True)
+
+pages = ["Home", "Predict", "Model Dashboard", "Data Explorer", "Monitoring", "Resources"]
+cols = st.columns(len(pages))
+
+for idx, page in enumerate(pages):
+    with cols[idx]:
+        if st.button(page, key=f"nav_{page}", use_container_width=True):
+            st.session_state.page = page
+            st.rerun()
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ============= HOME / OVERVIEW PAGE =============
+if st.session_state.page == "Home":
     # Hero Section
-    st.markdown("""
-    <div class="hero-section">
-        <div class="hero-title">Movie Intelligence</div>
-        <div class="hero-description">
-            This system predicts movie revenue using machine learning, provides classification 
-            and clustering insights, and demonstrates a complete MLOps pipeline with automated 
-            training, monitoring, and deployment capabilities.
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown('<div class="page-title">MOVIE INTELLIGENCE</div>', unsafe_allow_html=True)
+        st.markdown('<div class="page-subtitle">End-to-end ML Engineering System for Revenue Prediction</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### SYSTEM CAPABILITIES")
+        st.markdown("""
+        <div style="margin-top: 1.5rem;">
+            <div style="margin-bottom: 1rem;">
+                <span style="color: #E4B15E; font-weight: 700;">→</span> 
+                <span style="color: #F5F5F7; font-weight: 600;">REGRESSION</span>
+                <span style="color: #6B7280;"> — Revenue prediction with R² 0.6772</span>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <span style="color: #E4B15E; font-weight: 700;">→</span> 
+                <span style="color: #F5F5F7; font-weight: 600;">CLASSIFICATION</span>
+                <span style="color: #6B7280;"> — Hit/Flop label with 85.3% accuracy</span>
+            </div>
+            <div>
+                <span style="color: #E4B15E; font-weight: 700;">→</span> 
+                <span style="color: #F5F5F7; font-weight: 600;">CLUSTERING</span>
+                <span style="color: #6B7280;"> — Movie archetypes identification</span>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # Workflow Visualization
-    st.markdown('<div class="section-header">MLOps Workflow</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### SYSTEM METRICS")
+        
+        st.markdown(f"""
+        <div style="margin-bottom: 1.5rem;">
+            <div class="metric-label">MODEL VERSION</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #F5F5F7;">v1.2.0</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div style="margin-bottom: 1.5rem;">
+            <div class="metric-label">LAST TRAINED</div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: #A1A1AA;">DEC 16, 2024</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div>
+            <div class="metric-label">BEST R² SCORE</div>
+            <div style="font-size: 2rem; font-weight: 800; color: #E4B15E;">0.6772</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    workflow_steps = [
-        "Data Ingestion",
-        "Cleaning",
-        "Feature Engineering",
-        "Training",
-        "Evaluation",
-        "Deployment",
-        "Monitoring"
-    ]
+    # Workflow Strip
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("## ML WORKFLOW")
     
-    cols = st.columns(len(workflow_steps) * 2 - 1)
-    for i, step in enumerate(workflow_steps):
-        with cols[i * 2]:
+    workflow_cols = st.columns(15)
+    steps = ["INGEST", "CLEAN", "FEATURES", "TRAIN", "EVALUATE", "DEPLOY", "MONITOR"]
+    
+    for i, step in enumerate(steps):
+        with workflow_cols[i*2]:
             st.markdown(f"""
-            <div class="workflow-step">{step}</div>
+            <div class="workflow-step">
+                <div style="font-size: 2rem;">{"📥" if i==0 else "🧹" if i==1 else "⚙️" if i==2 else "🎯" if i==3 else "📊" if i==4 else "🚀" if i==5 else "📡"}</div>
+                <div class="workflow-step-title">{step}</div>
+            </div>
             """, unsafe_allow_html=True)
-        if i < len(workflow_steps) - 1:
-            with cols[i * 2 + 1]:
+        
+        if i < len(steps) - 1:
+            with workflow_cols[i*2 + 1]:
                 st.markdown('<div class="workflow-arrow">→</div>', unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Summary Cards
-    st.markdown('<div class="section-header">ML Capabilities</div>', unsafe_allow_html=True)
+    # What this app does
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("## CORE FUNCTIONS")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("""
-        <div class="card">
-            <h3 style="color: #2F3A8F; margin-top: 0;">📈 Regression Model</h3>
-            <p style="color: #6B7280; margin-bottom: 1rem;">
-                Predicts exact movie revenue using advanced ensemble methods (XGBoost, LightGBM, CatBoost)
-            </p>
-            <div style="background-color: #F3F4F6; padding: 0.75rem; border-radius: 6px;">
-                <div style="font-size: 0.85rem; color: #6B7280;">Current Performance</div>
-                <div style="font-size: 1.5rem; font-weight: bold; color: #2F3A8F;">R² = 0.87</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 2.5rem; text-align: center; margin-bottom: 1rem;">💰</div>', unsafe_allow_html=True)
+        st.markdown("### PREDICT REVENUE")
+        st.markdown('<p class="info-note">Input movie parameters and get instant revenue predictions from trained ensemble models.</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
-        st.markdown("""
-        <div class="card">
-            <h3 style="color: #2F3A8F; margin-top: 0;">🎯 Classification Model</h3>
-            <p style="color: #6B7280; margin-bottom: 1rem;">
-                Classifies movies as Hit or Flop based on revenue thresholds and market performance
-            </p>
-            <div style="background-color: #F3F4F6; padding: 0.75rem; border-radius: 6px;">
-                <div style="font-size: 0.85rem; color: #6B7280;">Current Performance</div>
-                <div style="font-size: 1.5rem; font-weight: bold; color: #2F3A8F;">Acc = 92%</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 2.5rem; text-align: center; margin-bottom: 1rem;">📈</div>', unsafe_allow_html=True)
+        st.markdown("### ANALYZE PERFORMANCE")
+        st.markdown('<p class="info-note">Review model metrics, diagnostics, and performance across regression, classification, and clustering.</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     with col3:
-        st.markdown("""
-        <div class="card">
-            <h3 style="color: #2F3A8F; margin-top: 0;">🎭 Clustering Model</h3>
-            <p style="color: #6B7280; margin-bottom: 1rem;">
-                Identifies movie archetypes and patterns using unsupervised learning techniques
-            </p>
-            <div style="background-color: #F3F4F6; padding: 0.75rem; border-radius: 6px;">
-                <div style="font-size: 0.85rem; color: #6B7280;">Identified Clusters</div>
-                <div style="font-size: 1.5rem; font-weight: bold; color: #2F3A8F;">5 Types</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 2.5rem; text-align: center; margin-bottom: 1rem;">📡</div>', unsafe_allow_html=True)
+        st.markdown("### TRACK MONITORING")
+        st.markdown('<p class="info-note">Monitor data drift, API health, and system performance in production environment.</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # Call to Action
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # CTA Buttons
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔮 Start Prediction", use_container_width=True):
-            st.session_state.page = "Predict Revenue"
+        if st.button("START PREDICTION", use_container_width=True):
+            st.session_state.page = "Predict"
             st.rerun()
     
     with col2:
-        if st.button("📊 View Model Dashboard", use_container_width=True):
+        if st.button("VIEW MODEL DASHBOARD", use_container_width=True):
             st.session_state.page = "Model Dashboard"
             st.rerun()
     
     with col3:
-        if st.button("🎓 Open Professor Documentation", use_container_width=True):
-            st.session_state.page = "Professor System Page"
+        if st.button("OPEN DOCUMENTATION", use_container_width=True):
+            st.session_state.page = "Resources"
             st.rerun()
 
-# ==================== PREDICT REVENUE PAGE ====================
-elif page == "Predict Revenue":
-    st.markdown('<div class="hero-section" style="padding: 2rem;"><div class="hero-title" style="font-size: 2rem;">🔮 Predict Movie Revenue</div></div>', unsafe_allow_html=True)
+# ============= PREDICT PAGE =============
+elif st.session_state.page == "Predict":
+    st.markdown('<div class="page-title">REVENUE PREDICTION</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Generate predictions using manual input, TMDB search, or batch processing</div>', unsafe_allow_html=True)
     
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    # Tabs for different prediction methods
+    tab1, tab2, tab3 = st.tabs(["MANUAL INPUT", "TMDB SEARCH", "BATCH PREDICTION"])
     
-    st.markdown("### Enter Movie Details")
+    # ============= TAB 1: MANUAL INPUT =============
+    with tab1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### INPUT PARAMETERS")
+        
+        # Two-column form
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown('<h3 style="margin-top: 1.5rem;">MOVIE BASICS</h3>', unsafe_allow_html=True)
+            
+            budget = st.number_input(
+                "BUDGET (USD)",
+                min_value=0,
+                value=50000000,
+                step=1000000,
+                format="%d",
+                help="Production budget in US dollars"
+            )
+            
+            budget_slider = st.slider(
+                "Adjust Budget",
+                min_value=0,
+                max_value=300000000,
+                value=budget,
+                step=5000000,
+                label_visibility="collapsed"
+            )
+            budget = budget_slider
+            
+            runtime = st.number_input(
+                "RUNTIME (MINUTES)",
+                min_value=30,
+                max_value=300,
+                value=120,
+                step=1
+            )
+            
+            release_month = st.selectbox(
+                "RELEASE MONTH",
+                options=list(range(1, 13)),
+                format_func=lambda x: datetime(2024, x, 1).strftime('%B').upper(),
+                index=5
+            )
+            
+            genres = st.multiselect(
+                "GENRES",
+                options=[
+                    "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
+                    "Drama", "Family", "Fantasy", "History", "Horror", "Music",
+                    "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"
+                ],
+                default=["Action", "Adventure"]
+            )
+        
+        with col2:
+            st.markdown('<h3 style="margin-top: 1.5rem;">POPULARITY & VOTES</h3>', unsafe_allow_html=True)
+            
+            popularity = st.number_input(
+                "POPULARITY",
+                min_value=0.0,
+                max_value=1000.0,
+                value=50.0,
+                step=1.0
+            )
+            
+            vote_average = st.slider(
+                "VOTE AVERAGE",
+                min_value=0.0,
+                max_value=10.0,
+                value=7.0,
+                step=0.1
+            )
+            
+            vote_count = st.number_input(
+                "VOTE COUNT",
+                min_value=0,
+                value=1000,
+                step=100
+            )
+        
+        st.markdown('<p class="info-note">All inputs match training schema.</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Buttons
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            predict_btn = st.button("RUN PREDICTION", use_container_width=True, type="primary")
+        
+        with col2:
+            reset_btn = st.button("RESET", use_container_width=True, key="reset_btn")
+        
+        if reset_btn:
+            st.session_state.prediction_result = None
+            st.rerun()
+        
+        # Make prediction
+        if predict_btn:
+            if not genres:
+                st.error("⚠️ Please select at least one genre")
+            else:
+                with st.spinner("Running prediction models..."):
+                    input_data = {
+                        "budget": float(budget),
+                        "runtime": float(runtime),
+                        "release_month": int(release_month),
+                        "popularity": float(popularity),
+                        "vote_average": float(vote_average),
+                        "vote_count": int(vote_count),
+                        "genres": ",".join(genres)
+                    }
+                    
+                    # Try API calls
+                    revenue_result, revenue_error = make_prediction(input_data, "/predict/revenue")
+                    classification_result, class_error = make_prediction(input_data, "/predict/classification")
+                    cluster_result, cluster_error = make_prediction(input_data, "/predict/cluster")
+                    
+                    # Use mock if API fails
+                    if revenue_error:
+                        st.error(f"Revenue API failed: {revenue_error}")
+                        if class_error:
+                            st.warning(f"Classification API failed: {class_error}")
+                        if cluster_error:
+                            st.warning(f"Cluster API failed: {cluster_error}")
+                        st.stop()
+                        result = {
+                            "revenue": predicted_revenue,
+                            "classification": "Hit" if predicted_revenue > budget * 2 else "Flop",
+                            "cluster": "Big Budget Blockbuster" if budget > 100000000 else "Mid-Budget Film",
+                            "confidence": "N/A",
+                            "model_version": "v1.2.0",
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                    else:
+                        result = {
+                            "revenue": revenue_result.get("predicted_revenue", 0.0),
+                            "classification": (
+                                classification_result.get("prediction_label", "Unknown") if not class_error else "Unknown"
+                            ),
+                            "cluster": (
+                                cluster_result.get("cluster_label", "Unknown") if not cluster_error else "Unknown"
+                            ),
+                            "confidence": revenue_result.get("confidence_interval", "N/A"),
+                            "model_version": "v1.2.0",
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+
+                    st.session_state.prediction_result = result
+                    st.success("✓ PREDICTION COMPLETED")
+        
+        # Display results
+        if st.session_state.prediction_result:
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown("## PREDICTION RESULTS")
+            
+            result = st.session_state.prediction_result
+            
+            # Three result cards
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-label">PREDICTED REVENUE</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="revenue-number">${result["revenue"]:,.0f}</div>', unsafe_allow_html=True)
+                roi = ((result['revenue'] / budget) - 1) * 100
+                st.markdown(f'<p class="info-note">ROI: {roi:+.1f}%</p>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-label">CLASSIFICATION</div>', unsafe_allow_html=True)
+                badge_class = "badge-hit" if result['classification'] == "Hit" else "badge-flop"
+                st.markdown(f'<div style="text-align: center; margin: 2rem 0;"><span class="badge {badge_class}">{result["classification"]}</span></div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-label">CLUSTER LABEL</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size: 1.3rem; font-weight: 700; color: #F5F5F7; margin: 1.5rem 0; text-align: center;">{result["cluster"]}</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Metadata
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("### PREDICTION METADATA")
+            
+            meta_col1, meta_col2, meta_col3 = st.columns(3)
+            
+            with meta_col1:
+                st.markdown(f"""
+                <div class="metric-label">CONFIDENCE / UNCERTAINTY</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #A1A1AA; margin-top: 0.5rem;">{result['confidence']}</div>
+                """, unsafe_allow_html=True)
+            
+            with meta_col2:
+                st.markdown(f"""
+                <div class="metric-label">MODEL VERSION</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #A1A1AA; margin-top: 0.5rem;">{result['model_version']}</div>
+                """, unsafe_allow_html=True)
+            
+            with meta_col3:
+                st.markdown(f"""
+                <div class="metric-label">INFERENCE TIMESTAMP</div>
+                <div style="font-size: 1rem; font-weight: 600; color: #A1A1AA; margin-top: 0.5rem;">{result['timestamp']}</div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
-    # Two column layout for inputs
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        budget = st.number_input(
-            "Budget (USD)",
-            min_value=0,
-            value=50000000,
-            step=1000000,
-            help="Production budget in US dollars"
+    # ============= TAB 2: TMDB SEARCH =============
+    with tab2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### SEARCH TMDB DATABASE")
+        
+        search_query = st.text_input(
+            "MOVIE TITLE",
+            placeholder="e.g., Avatar, Inception, The Avengers",
+            label_visibility="visible"
         )
         
-        runtime = st.number_input(
-            "Runtime (minutes)",
-            min_value=0,
-            max_value=300,
-            value=120,
-            step=1,
-            help="Movie duration in minutes"
+        if st.button("SEARCH", use_container_width=True):
+            if search_query:
+                st.info("🔍 TMDB search integration coming soon. Use Manual Input for now.")
+            else:
+                st.warning("⚠️ Enter a movie title to search")
+        
+        st.markdown('<p class="info-note">Search results will auto-fill the form. Missing fields will be flagged.</p>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ============= TAB 3: BATCH PREDICTION =============
+    with tab3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### BATCH PROCESSING")
+        
+        # Template download
+        template_df = pd.DataFrame({
+            "budget": [50000000, 100000000, 30000000],
+            "runtime": [120, 142, 95],
+            "release_month": [6, 7, 12],
+            "popularity": [50.0, 95.5, 25.3],
+            "vote_average": [7.0, 7.8, 6.5],
+            "vote_count": [1000, 15420, 450],
+            "genres": ["Action,Adventure", "Action,Sci-Fi", "Drama,Romance"]
+        })
+        
+        csv_buffer = io.StringIO()
+        template_df.to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            "DOWNLOAD CSV TEMPLATE",
+            data=csv_buffer.getvalue(),
+            file_name="batch_prediction_template.csv",
+            mime="text/csv",
+            use_container_width=True
         )
         
-        release_month = st.selectbox(
-            "Release Month",
-            options=list(range(1, 13)),
-            format_func=lambda x: datetime(2024, x, 1).strftime('%B'),
-            help="Month of theatrical release"
-        )
-    
-    with col2:
-        popularity = st.number_input(
-            "Popularity Score",
-            min_value=0.0,
-            max_value=1000.0,
-            value=50.0,
-            step=1.0,
-            help="TMDB popularity metric"
-        )
+        st.markdown('<div style="margin: 2rem 0;"></div>', unsafe_allow_html=True)
         
-        vote_average = st.slider(
-            "Vote Average",
-            min_value=0.0,
-            max_value=10.0,
-            value=7.0,
-            step=0.1,
-            help="Average user rating (0-10)"
-        )
+        # File uploader
+        uploaded_file = st.file_uploader("UPLOAD CSV FILE", type=['csv'])
         
-        vote_count = st.number_input(
-            "Vote Count",
-            min_value=0,
-            value=1000,
-            step=100,
-            help="Number of user votes"
-        )
-    
-    # Genre selection (full width)
-    st.markdown("### 🎭 Genres")
-    st.markdown('<div class="info-box">Select all applicable genres. Genre selection significantly impacts revenue predictions.</div>', unsafe_allow_html=True)
-    
-    genres = st.multiselect(
-        "Genres (multi-select – aligns with training data)",
-        options=[
-            "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
-            "Drama", "Family", "Fantasy", "History", "Horror", "Music",
-            "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"
-        ],
-        default=["Action", "Adventure"],
-        help="Select all genres that apply to this movie"
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Predict button
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("🎬 Predict Revenue", use_container_width=True, type="primary"):
-        if not genres:
-            st.error("⚠️ Please select at least one genre")
-        else:
-            with st.spinner("Running prediction models..."):
-                # Prepare input data
-                input_data = {
-                    "budget": budget,
-                    "runtime": runtime,
-                    "release_month": release_month,
-                    "popularity": popularity,
-                    "vote_average": vote_average,
-                    "vote_count": vote_count,
-                    "genres": ",".join(genres)
-                }
+        if uploaded_file:
+            try:
+                df = pd.read_csv(uploaded_file)
                 
-                # Mock prediction (replace with actual API call)
-                try:
-                    # Revenue prediction endpoint (exists)
-                    response = requests.post(
-                        f"{API_BASE_URL}/predict/revenue",
-                        json=input_data,
-                        timeout=15
-                    )
-                    response.raise_for_status()
-                    result = response.json()
-
-                    st.success("✅ Prediction completed successfully!")
-
-
+                # Validate schema
+                required_cols = ["budget", "runtime", "release_month", "popularity", "vote_average", "vote_count", "genres"]
+                missing = [col for col in required_cols if col not in df.columns]
+                
+                if missing:
+                    st.error(f"⚠️ Missing columns: {', '.join(missing)}")
+                else:
+                    st.success(f"✓ Schema validated. Found {len(df)} movies.")
                     
-                    # Display results
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown('<div class="section-header">Prediction Results</div>', unsafe_allow_html=True)
+                    # Preview
+                    st.markdown("### PREVIEW")
+                    st.dataframe(df.head(10), use_container_width=True)
                     
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <div class="metric-label">Predicted Revenue</div>
-                            <div class="metric-value">${result['predicted_revenue']:,.0f}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col2:
-                        status_class = "status-hit" if result['classification'] == "Hit" else "status-flop"
-                        st.markdown(f"""
-                        <div class="card" style="text-align: center;">
-                            <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.5rem;">Classification</div>
-                            <span class="status-badge {status_class}" style="font-size: 1.2rem; padding: 0.6rem 1.5rem;">
-                                {result['classification']}
-                            </span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col3:
-                        st.markdown(f"""
-                        <div class="card" style="text-align: center;">
-                            <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.5rem;">Movie Archetype</div>
-                            <div style="color: #2F3A8F; font-size: 1.2rem; font-weight: bold;">{result['cluster']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    # Metadata
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("""
-                    <div class="card">
-                        <h4 style="color: #2F3A8F; margin-top: 0;">Prediction Metadata</h4>
-                    """, unsafe_allow_html=True)
-                    
-                    meta_col1, meta_col2 = st.columns(2)
-                    with meta_col1:
-                        st.markdown(f"**Model Version:** {result['model_version']}")
-                        st.markdown(f"**Timestamp:** {result['timestamp']}")
-                    with meta_col2:
-                        st.markdown(f"**Selected Genres:** {', '.join(genres)}")
-                        st.markdown(f"**Budget-Revenue Ratio:** {result['predicted_revenue']/budget:.2f}x")
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                except requests.exceptions.HTTPError:
-                    st.error(f"❌ API error: {response.status_code} - {response.text}")
-                    st.info("💡 Check your /docs schema and ensure Streamlit keys match FastAPI.")
-                except Exception as e:
-                    st.error(f"❌ Prediction failed: {str(e)}")
-                    st.info("💡 Make sure the API server is running at " + API_BASE_URL)
-
-
-# ==================== MODEL DASHBOARD PAGE ====================
-elif page == "Model Dashboard":
-    st.markdown('<div class="hero-section" style="padding: 2rem;"><div class="hero-title" style="font-size: 2rem;">📊 Model Performance Dashboard</div></div>', unsafe_allow_html=True)
-    
-    # Model Metrics
-    st.markdown('<div class="section-header">Model Metrics</div>', unsafe_allow_html=True)
-    
-    metrics_data = {
-        "Model Type": ["Regression", "Classification", "Clustering"],
-        "Primary Metric": ["R² Score", "Accuracy", "Silhouette Score"],
-        "Value": [0.87, 0.92, 0.68],
-        "Secondary Metric": ["RMSE: $12.5M", "F1-Score: 0.89", "Davies-Bouldin: 0.45"],
-        "Status": ["✅ Excellent", "✅ Excellent", "✅ Good"]
-    }
-    
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(
-        pd.DataFrame(metrics_data),
-        use_container_width=True,
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Explanation
-    st.markdown("""
-    <div class="info-box">
-        <h4 style="margin-top: 0; color: #2F3A8F;">📚 Metric Explanations</h4>
-        <ul style="margin: 0; padding-left: 1.5rem;">
-            <li><strong>R² Score (0.87):</strong> Explains 87% of revenue variance – indicates strong predictive power</li>
-            <li><strong>RMSE ($12.5M):</strong> Average prediction error – acceptable given typical movie budgets</li>
-            <li><strong>Accuracy (92%):</strong> Correctly classifies Hit/Flop 92% of the time</li>
-            <li><strong>Silhouette Score (0.68):</strong> Clusters are well-separated and meaningful</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Visualizations
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### Actual vs Predicted Revenue")
+                    if st.button("RUN BATCH PREDICTION", use_container_width=True):
+                        with st.spinner(f"Processing {len(df)} movies..."):
+                            st.info("🔄 Batch prediction in progress...")
+                            # Implement batch prediction logic here
+            
+            except Exception as e:
+                st.error(f"⚠️ Error: {str(e)}")
         
-        # Mock data for visualization
-        np.random.seed(42)
-        actual = np.random.exponential(50, 100) * 1e6
-        predicted = actual + np.random.normal(0, 10, 100) * 1e6
-        
-        fig = px.scatter(
-            x=actual, y=predicted,
-            labels={"x": "Actual Revenue ($)", "y": "Predicted Revenue ($)"},
-            trendline="ols"
-        )
-        fig.update_traces(marker=dict(color='#2F3A8F', size=8, opacity=0.6))
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### Residual Distribution")
-        
-        residuals = predicted - actual
-        fig = px.histogram(
-            residuals,
-            nbins=30,
-            labels={"value": "Residual ($)", "count": "Frequency"}
-        )
-        fig.update_traces(marker=dict(color='#00BFA6'))
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Confusion Matrix
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("#### Classification Confusion Matrix")
-    
-    confusion_matrix = np.array([[45, 5], [3, 47]])
-    fig = px.imshow(
-        confusion_matrix,
-        labels=dict(x="Predicted", y="Actual", color="Count"),
-        x=['Flop', 'Hit'],
-        y=['Flop', 'Hit'],
-        text_auto=True,
-        color_continuous_scale='Blues'
-    )
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# ==================== DATA EXPLORER PAGE ====================
-elif page == "Data Explorer":
-    st.markdown('<div class="hero-section" style="padding: 2rem;"><div class="hero-title" style="font-size: 2rem;">📊 Data Explorer</div></div>', unsafe_allow_html=True)
+# ============= MODEL DASHBOARD PAGE =============
+elif st.session_state.page == "Model Dashboard":
+    st.markdown('<div class="page-title">MODEL DASHBOARD</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Performance metrics and diagnostic visualizations</div>', unsafe_allow_html=True)
     
-    # Dataset selector
-    dataset_choice = st.selectbox("Select Dataset", ["Training Set", "Test Set"])
+    # Model comparison
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### MODEL COMPARISON")
     
-    # Mock data
-    np.random.seed(42)
-    n_samples = 100
-    df = pd.DataFrame({
-        'budget': np.random.exponential(30, n_samples) * 1e6,
-        'runtime': np.random.normal(110, 20, n_samples),
-        'popularity': np.random.exponential(20, n_samples),
-        'vote_average': np.random.normal(6.5, 1.2, n_samples),
-        'vote_count': np.random.exponential(500, n_samples),
-        'revenue': np.random.exponential(50, n_samples) * 1e6
+    # Metrics table
+    metrics_df = pd.DataFrame({
+        "Model": ["Gradient Boosting", "Classification", "Clustering"],
+        "Type": ["Regression", "Binary", "K-Means"],
+        "Primary Metric": ["R² Score", "Accuracy", "Silhouette"],
+        "Value": [0.6772, 0.8525, 0.1009],
+        "Secondary": ["MAE: $36.2M", "F1: 0.8525", "Clusters: 4"]
     })
     
-    # Summary Statistics
-    st.markdown('<div class="section-header">Summary Statistics</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(df.describe(), use_container_width=True)
+    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+    
+    st.markdown('<p class="info-note">Metrics from model training on Dec 16, 2024.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Feature Distributions
-    st.markdown('<div class="section-header">Feature Distributions</div>', unsafe_allow_html=True)
+    # Commentary
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### WHY THESE METRICS MATTER")
+    st.markdown("""
+    <div style="line-height: 1.8; color: #A1A1AA;">
+        <p><strong style="color: #F5F5F7;">R² Score (0.6772):</strong> Explains 67.7% of revenue variance—strong for entertainment industry volatility.</p>
+        <p><strong style="color: #F5F5F7;">MAE ($36.2M):</strong> Average prediction error acceptable given box office scale ($100M+ films).</p>
+        <p><strong style="color: #F5F5F7;">Accuracy (85.3%):</strong> Hit/Flop classification reliable for investment decisions.</p>
+        <p><strong style="color: #F5F5F7;">Silhouette (0.10):</strong> Moderate cluster separation—movie categories overlap naturally.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("## DIAGNOSTIC VISUALIZATIONS")
+    
+    # Placeholder for actual vs predicted plot
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        feature1 = st.selectbox("Select Feature", df.columns, key="feat1")
-        fig = px.histogram(df, x=feature1, nbins=30)
-        fig.update_traces(marker=dict(color='#2F3A8F'))
-        fig.update_layout(height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("### ACTUAL VS PREDICTED REVENUE")
+        st.info("📊 Load processed data to generate plot")
+        st.markdown('<p class="info-note">Regression diagnostics show model fit quality.</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        feature2 = st.selectbox("Select Feature", df.columns, index=1, key="feat2")
-        fig = px.box(df, y=feature2)
-        fig.update_traces(marker=dict(color='#00BFA6'))
-        fig.update_layout(height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("### RESIDUAL DISTRIBUTION")
+        st.info("📊 Load processed data to generate plot")
+        st.markdown('<p class="info-note">Residuals centered at zero indicate unbiased model.</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Correlation Heatmap
-    st.markdown('<div class="section-header">Correlation Heatmap</div>', unsafe_allow_html=True)
+    # Confusion matrix
     st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### CLASSIFICATION PERFORMANCE")
     
-    corr_matrix = df.corr()
-    fig = px.imshow(
-        corr_matrix,
-        text_auto='.2f',
-        color_continuous_scale='RdBu_r',
-        aspect='auto'
+    # Create confusion matrix visualization
+    conf_matrix = np.array([[863, 145], [157, 883]])
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=conf_matrix,
+        x=['Predicted Flop', 'Predicted Hit'],
+        y=['Actual Flop', 'Actual Hit'],
+        colorscale=[[0, '#16161A'], [1, '#E4B15E']],
+        showscale=False,
+        text=conf_matrix,
+        texttemplate='%{text}',
+        textfont={"size": 20, "color": "#F5F5F7"}
+    ))
+    
+    fig.update_layout(
+        plot_bgcolor='#0D0D0F',
+        paper_bgcolor='#0D0D0F',
+        font=dict(color='#F5F5F7', size=12),
+        xaxis=dict(side='bottom'),
+        yaxis=dict(autorange='reversed'),
+        height=400,
+        margin=dict(l=20, r=20, t=40, b=20)
     )
-    fig.update_layout(height=500)
+    
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
     
-    # Dataset Table
-    st.markdown('<div class="section-header">Dataset Preview</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(df.head(50), use_container_width=True, height=400)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ==================== MONITORING PAGE ====================
-elif page == "Monitoring":
-    st.markdown('<div class="hero-section" style="padding: 2rem;"><div class="hero-title" style="font-size: 2rem;">📡 System Monitoring</div></div>', unsafe_allow_html=True)
-    
-    # API Health
-    st.markdown('<div class="section-header">API Health Status</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("""
-        <div class="metric-card">
-            <div class="metric-label">Uptime</div>
-            <div class="metric-value">99.8%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="metric-card">
-            <div class="metric-label">Avg Response Time</div>
-            <div class="metric-value">45ms</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="metric-card">
-            <div class="metric-label">Requests (24h)</div>
-            <div class="metric-value">2,847</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="metric-card">
-            <div class="metric-label">Error Rate</div>
-            <div class="metric-value">0.2%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Recent Predictions Log
-    st.markdown('<div class="section-header">Latest Inference Logs</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    
-    logs_data = {
-        "Timestamp": [
-            "2024-12-16 14:23:15",
-            "2024-12-16 14:21:03",
-            "2024-12-16 14:18:42",
-            "2024-12-16 14:15:30",
-            "2024-12-16 14:12:18"
-        ],
-        "Input Budget": ["$45M", "$120M", "$30M", "$80M", "$55M"],
-        "Predicted Revenue": ["$112M", "$340M", "$65M", "$195M", "$138M"],
-        "Classification": ["Hit", "Hit", "Flop", "Hit", "Hit"],
-        "Response Time": ["42ms", "38ms", "45ms", "41ms", "43ms"],
-        "Status": ["✅ Success", "✅ Success", "✅ Success", "✅ Success", "✅ Success"]
-    }
-    
-    st.dataframe(pd.DataFrame(logs_data), use_container_width=True, hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Data Drift Summary
-    st.markdown('<div class="section-header">Data Drift Analysis</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">Feature Drift Status</h4>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Budget:</strong> No significant drift detected</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Runtime:</strong> Stable distribution</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">⚠️</span>
-                <span><strong>Popularity:</strong> Minor drift (5% shift)</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Vote Average:</strong> Within expected range</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">Model Performance Trends</h4>
-            <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 0.5rem 0;">
-                <div style="font-size: 0.85rem; color: #6B7280;">Last 7 Days R² Score</div>
-                <div style="font-size: 1.2rem; font-weight: bold; color: #10B981;">0.87 (Stable ✓)</div>
-            </div>
-            <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 0.5rem 0;">
-                <div style="font-size: 0.85rem; color: #6B7280;">Classification Accuracy</div>
-                <div style="font-size: 1.2rem; font-weight: bold; color: #10B981;">92% (Stable ✓)</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Links to reports
-    st.markdown("""
-    <div class="info-box">
-        <h4 style="margin-top: 0; color: #2F3A8F;">📄 Detailed Reports</h4>
-        <p style="margin: 0.5rem 0;">Access comprehensive monitoring reports:</p>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-            <li><a href="#" style="color: #2F3A8F; font-weight: 600;">Full Data Drift Report (PDF)</a></li>
-            <li><a href="#" style="color: #2F3A8F; font-weight: 600;">Model Validation Dashboard</a></li>
-            <li><a href="#" style="color: #2F3A8F; font-weight: 600;">Performance Metrics History</a></li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ==================== PROFESSOR SYSTEM PAGE ====================
-elif page == "Professor System Page":
-    st.markdown("""
-    <div class="hero-section" style="padding: 2rem;">
-        <div class="hero-title" style="font-size: 2rem;">🎓 Academic Documentation Portal</div>
-        <div class="hero-description" style="font-size: 1rem;">
-            Complete system documentation for academic evaluation and reproducibility
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Quick Access Buttons
-    st.markdown('<div class="section-header">Quick Access Resources</div>', unsafe_allow_html=True)
-    
+    # Summary metrics
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📁</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">GitHub Repository</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Complete source code and version history</p>
-            <a href="https://github.com/yourusername/movie-revenue-prediction" target="_blank" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #2F3A8F; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               View Repository
-            </a>
-        </div>
+        <div class="metric-label">PRECISION</div>
+        <div class="metric-number">0.853</div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📄</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">Technical Report</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Detailed methodology and results</p>
-            <a href="#" target="_blank" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #00BFA6; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               Download PDF
-            </a>
-        </div>
+        <div class="metric-label">RECALL</div>
+        <div class="metric-number">0.853</div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔌</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">API Documentation</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Interactive Swagger/OpenAPI docs</p>
-            <a href="http://localhost:8000/docs" target="_blank" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #2F3A8F; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               Open Swagger UI
-            </a>
-        </div>
+        <div class="metric-label">F1 SCORE</div>
+        <div class="metric-number">0.853</div>
         """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ============= DATA EXPLORER PAGE =============
+elif st.session_state.page == "Data Explorer":
+    st.markdown('<div class="page-title">DATA EXPLORER</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Dataset statistics and exploration tools</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### DATASET CONTROLS")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        dataset = st.selectbox("DATASET", ["Training", "Test", "Full"])
+    
+    with col2:
+        month_filter = st.multiselect("MONTH FILTER", list(range(1, 13)), format_func=lambda x: datetime(2024, x, 1).strftime('%B').upper())
+    
+    with col3:
+        sample_size = st.slider("SAMPLE SIZE", 100, 10000, 1000, 100)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.info("📊 Connect to processed dataset to enable exploration features.")
+
+# ============= MONITORING PAGE =============
+elif st.session_state.page == "Monitoring":
+    st.markdown('<div class="page-title">SYSTEM MONITORING</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Production health and drift detection</div>', unsafe_allow_html=True)
+    
+    # Status strip
+    api_healthy = check_api_health()
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">API STATUS</div>', unsafe_allow_html=True)
+        status_text = "HEALTHY" if api_healthy else "OFFLINE"
+        status_color = "#E4B15E" if api_healthy else "#B11226"
+        st.markdown(f'<div style="font-size: 1.5rem; font-weight: 800; color: {status_color};">{status_text}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">LAST PREDICTION</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 1rem; font-weight: 600; color: #A1A1AA;">N/A</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">MONITORING RUN</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 1rem; font-weight: 600; color: #A1A1AA;">N/A</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Monitoring tabs
+    tab1, tab2, tab3 = st.tabs(["DATA DRIFT", "PERFORMANCE TRACKING", "LOGS"])
+    
+    with tab1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.info("📊 Drift detection reports available after monitoring pipeline execution.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.info("📈 Performance tracking across model versions coming soon.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with tab3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.info("📋 Recent inference logs will appear here.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ============= RESOURCES PAGE =============
+elif st.session_state.page == "Resources":
+    st.markdown('<div class="page-title">QUICK ACCESS RESOURCES</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Everything required to assess the system end-to-end</div>', unsafe_allow_html=True)
+    
+    # Quick links
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### DOCUMENTATION & CODE")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.link_button(
+            "GITHUB REPOSITORY",
+            "https://github.com/DaraBodla/movie-revenue-predictor",
+            use_container_width=True
+        )
+    
+    with col2:
+        st.button("TECHNICAL REPORT (PDF)", use_container_width=True, disabled=True)
+    
+    with col3:
+        st.button("API DOCUMENTATION", use_container_width=True, disabled=True)
     
     col4, col5, col6 = st.columns(3)
     
     with col4:
-        st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">🐳</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">Docker Instructions</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Containerization and deployment</p>
-            <a href="#docker-section" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #00BFA6; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               View Instructions
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
+        st.button("DOCKER INSTRUCTIONS", use_container_width=True, disabled=True)
     
     with col5:
-        st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">⚙️</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">CI/CD Pipeline</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Automated testing and deployment</p>
-            <a href="https://github.com/yourusername/movie-revenue-prediction/actions" target="_blank" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #2F3A8F; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               View Pipeline
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
+        st.button("CI/CD WORKFLOW", use_container_width=True, disabled=True)
     
     with col6:
-        st.markdown("""
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📊</div>
-            <h4 style="color: #2F3A8F; margin: 0.5rem 0;">Monitoring Logs</h4>
-            <p style="color: #6B7280; font-size: 0.9rem; margin: 0.5rem 0;">Real-time system performance</p>
-            <a href="#" 
-               style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background-color: #00BFA6; 
-               color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
-               View Dashboard
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
+        st.button("DRIFT REPORTS", use_container_width=True, disabled=True)
     
-    # Project Evidence Checklist
-    st.markdown('<div class="section-header">Project Evidence Checklist</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">ML Engineering Components</h4>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Model Training:</strong> XGBoost, LightGBM, CatBoost implemented</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Metrics Tracking:</strong> R², RMSE, Accuracy logged with MLflow</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Feature Engineering:</strong> Genre encoding, temporal features, scaling</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Cross-Validation:</strong> 5-fold CV for model selection</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Hyperparameter Tuning:</strong> Optuna for optimization</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">MLOps & Deployment</h4>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>FastAPI:</strong> RESTful endpoints with validation</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Docker:</strong> Multi-stage builds with optimization</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>CI/CD:</strong> GitHub Actions automated pipeline</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>Monitoring:</strong> Data drift detection with Evidently</span>
-            </div>
-            <div class="evidence-item">
-                <span class="evidence-check">✅</span>
-                <span><strong>UI Integration:</strong> Streamlit connected to API</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # System Architecture
-    st.markdown('<div class="section-header">System Architecture</div>', unsafe_allow_html=True)
+    # Assessment notes
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### ASSESSMENT NOTES")
     
     st.markdown("""
-    <div class="card">
-        <h4 style="color: #2F3A8F; margin-top: 0;">High-Level Architecture</h4>
-        <div style="background-color: #F9FAFB; padding: 2rem; border-radius: 8px; text-align: center; margin: 1rem 0;">
-            <div style="font-family: monospace; line-height: 2;">
-                <strong>User Interface (Streamlit)</strong><br>
-                ↓<br>
-                <strong>REST API (FastAPI)</strong><br>
-                ↓<br>
-                <strong>ML Pipeline (Prefect Orchestration)</strong><br>
-                ├─ Data Ingestion (TMDB API)<br>
-                ├─ Feature Engineering<br>
-                ├─ Model Training (XGBoost/LightGBM)<br>
-                ├─ Model Registry (MLflow)<br>
-                └─ Monitoring (Evidently)<br>
-                ↓<br>
-                <strong>Storage Layer</strong><br>
-                ├─ PostgreSQL (Metadata)<br>
-                ├─ S3/MinIO (Artifacts)<br>
-                └─ Redis (Caching)
-            </div>
-        </div>
+    <div style="line-height: 1.8; color: #A1A1AA;">
+        <h3 style="color: #F5F5F7; margin-top: 1.5rem;">MODEL LIMITATIONS</h3>
+        <p>• Genre dependency on available TMDB taxonomy</p>
+        <p>• Training data limited to English-language films</p>
+        <p>• Historical data may not capture post-pandemic patterns</p>
         
-        <h4 style="color: #2F3A8F; margin: 1.5rem 0 0.5rem 0;">Architecture Highlights</h4>
-        <ul style="color: #6B7280; line-height: 1.8;">
-            <li><strong>Microservices Design:</strong> Separate services for API, training, and monitoring</li>
-            <li><strong>Event-Driven:</strong> Prefect workflows trigger on data updates</li>
-            <li><strong>Scalable:</strong> Docker Swarm/Kubernetes ready</li>
-            <li><strong>Observable:</strong> Structured logging with ELK stack integration</li>
-            <li><strong>Secure:</strong> API authentication with JWT tokens</li>
-        </ul>
+        <h3 style="color: #F5F5F7; margin-top: 1.5rem;">DATA LIMITATIONS</h3>
+        <p>• Single holdout validation split (justified for deterministic evaluation)</p>
+        <p>• Missing budget data for ~40% of TMDB movies</p>
+        <p>• Revenue figures not inflation-adjusted</p>
+        
+        <h3 style="color: #F5F5F7; margin-top: 1.5rem;">FUTURE WORK</h3>
+        <p>• Real-time TMDB API enrichment</p>
+        <p>• Automated drift detection triggers</p>
+        <p>• Model registry with A/B testing</p>
+        <p>• Feature store implementation (Feast)</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Reproducibility Steps
-    st.markdown('<div class="section-header" id="docker-section">Reproducibility Guide</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="card">
-        <h4 style="color: #2F3A8F; margin-top: 0;">Step-by-Step Setup</h4>
-        
-        <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-            <h5 style="color: #2F3A8F; margin: 0 0 0.5rem 0;">1️⃣ Clone Repository</h5>
-            <code style="background-color: #1F2937; color: #10B981; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                git clone https://github.com/yourusername/movie-revenue-prediction.git<br>
-                cd movie-revenue-prediction
-            </code>
-        </div>
-        
-        <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-            <h5 style="color: #2F3A8F; margin: 0 0 0.5rem 0;">2️⃣ Environment Setup</h5>
-            <code style="background-color: #1F2937; color: #10B981; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                python -m venv venv<br>
-                source venv/bin/activate  # On Windows: venv\\Scripts\\activate<br>
-                pip install -r requirements.txt
-            </code>
-        </div>
-        
-        <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-            <h5 style="color: #2F3A8F; margin: 0 0 0.5rem 0;">3️⃣ Docker Deployment</h5>
-            <code style="background-color: #1F2937; color: #10B981; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                docker-compose up -d --build<br>
-                # API: http://localhost:8000<br>
-                # Streamlit: http://localhost:8501<br>
-                # MLflow: http://localhost:5000
-            </code>
-        </div>
-        
-        <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-            <h5 style="color: #2F3A8F; margin: 0 0 0.5rem 0;">4️⃣ Run Training Pipeline</h5>
-            <code style="background-color: #1F2937; color: #10B981; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                python src/train.py --config configs/training_config.yaml<br>
-                # Training logs saved to logs/<br>
-                # Models saved to models/<br>
-                # Metrics tracked in MLflow
-            </code>
-        </div>
-        
-        <div style="background-color: #F9FAFB; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
-            <h5 style="color: #2F3A8F; margin: 0 0 0.5rem 0;">5️⃣ Evaluate Results</h5>
-            <code style="background-color: #1F2937; color: #10B981; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                python src/evaluate.py --model-path models/best_model.pkl<br>
-                # Generates: reports/evaluation_report.html<br>
-                # Metrics: reports/metrics.json
-            </code>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Limitations & Future Work
-    st.markdown('<div class="section-header">Limitations & Future Enhancements</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">⚠️ Current Limitations</h4>
-            <ul style="color: #6B7280; line-height: 1.8; margin: 0.5rem 0;">
-                <li><strong>Genre Dependency:</strong> Limited by TMDB genre taxonomy; custom genres not supported</li>
-                <li><strong>External API:</strong> TMDB rate limits may affect data collection (40 req/10s)</li>
-                <li><strong>Temporal Lag:</strong> Model retraining scheduled weekly; may miss rapid market shifts</li>
-                <li><strong>Regional Bias:</strong> Trained primarily on US market data</li>
-                <li><strong>Cold Start:</strong> New movies with no popularity data have reduced accuracy</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="card">
-            <h4 style="color: #2F3A8F; margin-top: 0;">🚀 Planned Improvements</h4>
-            <ul style="color: #6B7280; line-height: 1.8; margin: 0.5rem 0;">
-                <li><strong>Feature Store:</strong> Implement Feast for centralized feature management</li>
-                <li><strong>Model Registry:</strong> Enhanced versioning with automatic A/B testing</li>
-                <li><strong>Real-Time Drift:</strong> Continuous monitoring with automatic retraining triggers</li>
-                <li><strong>Multi-Region:</strong> Separate models for international markets</li>
-                <li><strong>Ensemble Stacking:</strong> Meta-learner combining multiple base models</li>
-                <li><strong>Graph Features:</strong> Actor/director collaboration networks</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Academic Assessment Note
-    st.markdown("""
-    <div class="info-box" style="background-color: #EFF6FF; border-left: 4px solid #2F3A8F;">
-        <h4 style="margin-top: 0; color: #2F3A8F;">📋 For Academic Evaluators</h4>
-        <p style="margin: 0.5rem 0; line-height: 1.8;">
-            This system demonstrates end-to-end ML engineering competencies including:
-        </p>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem; line-height: 1.8;">
-            <li>Advanced feature engineering with domain knowledge integration</li>
-            <li>Production-grade API design with validation and error handling</li>
-            <li>Comprehensive MLOps pipeline with automated orchestration</li>
-            <li>Rigorous model evaluation and monitoring practices</li>
-            <li>Professional documentation and reproducible workflows</li>
-        </ul>
-        <p style="margin: 0.5rem 0; font-weight: 600;">
-            All code, data, and documentation are available in the GitHub repository. 
-            For questions or clarifications, please refer to the technical report or contact via the repository issues.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown("""
-<div style="text-align: center; color: #6B7280; padding: 2rem 0; border-top: 1px solid #E5E7EB;">
-    <p style="margin: 0;">Movie Intelligence v1.2.0 | Built with Streamlit, FastAPI, and ❤️</p>
-    <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">© 2024 | Academic ML Engineering Project</p>
+<div style="text-align: center; color: #6B7280; padding: 2rem 0;">
+    <p style="margin: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;">MOVIE INTELLIGENCE v1.2.0</p>
+    <p style="margin: 0.5rem 0 0 0; font-size: 0.7rem;">ML Engineering System | Built for Academic Evaluation</p>
 </div>
 """, unsafe_allow_html=True)

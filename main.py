@@ -252,7 +252,7 @@ async def predict_revenue(
     movie: MovieInput,
     api_key: str = Depends(verify_api_key)
 ):
-    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
+    log_live_input(movie.dict())
     """Predict movie revenue for a single movie"""
     if models is None or models.regression_model is None:
         raise HTTPException(status_code=503, detail="Regression model not loaded")
@@ -281,7 +281,7 @@ async def predict_revenue(
 
 @app.post("/predict/classification", response_model=ClassificationResponse)
 async def predict_classification(movie: MovieInput):
-    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
+    log_live_input(movie.dict())
     """Predict if movie will be a hit or flop"""
     if models is None or models.classification_model is None:
         raise HTTPException(status_code=503, detail="Classification model not loaded")
@@ -311,7 +311,7 @@ async def predict_classification(movie: MovieInput):
 
 @app.post("/predict/cluster", response_model=ClusterResponse)
 async def predict_cluster(movie: MovieInput):
-    log_live_input(payload.dict() if hasattr(payload, "dict") else dict(payload))
+    log_live_input(movie.dict())
     """Assign movie to a performance cluster"""
     if models is None or models.clustering_model is None:
         raise HTTPException(status_code=503, detail="Clustering model not loaded")
