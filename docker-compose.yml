@@ -17,6 +17,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
       - TMDB_BEARER_TOKEN: ${TMDB_BEARER_TOKEN}
+      - CLASSIFICATION_THRESHOLD:=0.55
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

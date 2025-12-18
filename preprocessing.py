@@ -284,21 +284,34 @@ class MovieDataPreprocessor:
         return pd.DataFrame(genre_cols, index=df.index)
     
     def create_target_labels(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create classification labels for 'hit' vs 'flop'.
+        """
+        Create classification labels for 'hit' vs 'flop' using ROI-based rule.
 
-        Since the cleaned dataset does not include a release year/month, we use a
-        dataset-wide median revenue as the decision boundary.
+        Default rule:
+        Hit if revenue >= HIT_ROI_THRESHOLD * budget
+        Where HIT_ROI_THRESHOLD defaults to 2.0 if not defined in config.
+
+        This is more meaningful than "above median revenue", because it reflects
+        commercial success relative to spend.
         """
         df = df.copy()
 
         if 'revenue' not in df.columns:
             raise ValueError("Column 'revenue' is required to create labels.")
+        if 'budget' not in df.columns:
+            raise ValueError("Column 'budget' is required to create labels.")
 
-        median_revenue = df['revenue'].median()
-        df['is_hit'] = (df['revenue'] > median_revenue).astype(int)
+        # configurable threshold
+        HIT_ROI_THRESHOLD = getattr(config, "HIT_ROI_THRESHOLD", 2.0)
 
-        # ROI is meaningful without leaking into features (kept for reporting/analysis only)
-        df['roi'] = (df['revenue'] - df['budget']) / (df['budget'] + 1)
+        # ROI ratio
+        df["revenue_to_budget_ratio"] = df["revenue"] / (df["budget"] + 1.0)
+
+        # Hit label
+        df["is_hit"] = (df["revenue"] >= (df["budget"] * HIT_ROI_THRESHOLD)).astype(int)
+
+        # Keep ROI for reporting/debug
+        df["roi"] = (df["revenue"] - df["budget"]) / (df["budget"] + 1.0)
 
         return df
     def prepare_features(self, df: pd.DataFrame, target_col: str | None = 'revenue',

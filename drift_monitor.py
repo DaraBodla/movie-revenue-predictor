@@ -98,7 +98,7 @@ def run():
     # write JSON
     json_path = os.path.join(REPORT_DIR, "drift_summary.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
+        json.dump(results, f, indent=2, default=str)
 
     # simple HTML report
     html_path = os.path.join(REPORT_DIR, "drift_report.html")
@@ -128,5 +128,5 @@ def run():
     print(" -", json_path)
     print(" -", html_path)
 
-if __name__ == "___main__":
+if __name__ == "__main__":
     run()

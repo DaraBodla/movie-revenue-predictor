@@ -28,6 +28,8 @@ logger = setup_logging()
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+CLASSIFICATION_THRESHOLD = float(os.getenv("CLASSIFICATION_THRESHOLD","0.50"))
+
 def verify_api_key(request: Request, api_key: str = Depends(API_KEY_HEADER)):
     """Optional API key check.
 
@@ -68,6 +70,8 @@ class RevenuePredictionResponse(BaseModel):
 
 class ClassificationResponse(BaseModel):
     """Classification prediction response"""
+    prediction: str # "Hit" or "Flop" for ui
+    predicted_class: str
     is_hit: bool
     hit_probability: float
     flop_probability: float
@@ -252,8 +256,9 @@ async def predict_revenue(
     movie: MovieInput,
     api_key: str = Depends(verify_api_key)
 ):
-    log_live_input(movie.dict())
     """Predict movie revenue for a single movie"""
+    log_live_input(movie.dict())
+    
     if models is None or models.regression_model is None:
         raise HTTPException(status_code=503, detail="Regression model not loaded")
     
@@ -281,32 +286,38 @@ async def predict_revenue(
 
 @app.post("/predict/classification", response_model=ClassificationResponse)
 async def predict_classification(movie: MovieInput):
-    log_live_input(movie.dict())
     """Predict if movie will be a hit or flop"""
+    log_live_input(movie.dict())
+
     if models is None or models.classification_model is None:
         raise HTTPException(status_code=503, detail="Classification model not loaded")
-    
+
     try:
-        # Convert input to DataFrame
         input_data = pd.DataFrame([movie.dict()])
-        
-        # Preprocess
+
         input_data = models.preprocessor.engineer_features(input_data, fit=False)
         X, _ = models.preprocessor.prepare_features(input_data, target_col=None, fit=False)
-        
-        # Predict
-        prediction = models.classification_model.predict(X)[0]
-        probabilities = models.classification_model.predict_proba(X)[0]
-        
+
+        proba = models.classification_model.predict_proba(X)[0]
+        p_hit = float(proba[1])
+        p_flop = float(proba[0])
+
+        is_hit = p_hit >= CLASSIFICATION_THRESHOLD
+        label = "Hit" if is_hit else "Flop"
+
         return {
-            "is_hit": bool(prediction),
-            "hit_probability": float(probabilities[1]),
-            "flop_probability": float(probabilities[0]),
-            "prediction_label": "Hit" if prediction else "Flop"
+            "prediction": label,
+            "predicted_class": label,# ✅ add this (UI-friendly)
+            "is_hit": bool(is_hit),
+            "hit_probability": p_hit,
+            "flop_probability": p_flop,
+            "prediction_label": label,
+            "threshold_used": CLASSIFICATION_THRESHOLD,# keep your old key too
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
+
 
 
 @app.post("/predict/cluster", response_model=ClusterResponse)
@@ -328,20 +339,37 @@ async def predict_cluster(movie: MovieInput):
         cluster_id = int(models.clustering_model.predict(X)[0])
         
         # Get cluster interpretation
-        interpretations = {
-            0: "Low-Budget Indies",
-            1: "Profitable Mid-Budget",
-            2: "Blockbusters",
-            3: "Underperformers"
-        }
-        
+        # ✅ Load cluster interpretations + profiles from training_results.json (single source of truth)
+        results_file = config.REPORTS_DIR / "training_results.json"
+
+        interpretations = {}
+        profiles = {}
+
+        if results_file.exists():
+            with open(results_file, "r", encoding="utf-8") as f:
+                tr = json.load(f)
+            clustering = tr.get("models", {}).get("clustering", {})
+            interpretations = clustering.get("interpretations", {}) or {}
+            profiles = clustering.get("cluster_profiles", {}) or {}
+
+        # label from file (keys are usually strings)
+        cluster_label = interpretations.get(str(cluster_id), f"Cluster {cluster_id}")
+
+        # build profile for this cluster id (profiles stored as metric-> {cluster_id: value})
+        cluster_profile = {"cluster_id": cluster_id}
+        try:
+            for metric_name, mapping in (profiles or {}).items():
+                if isinstance(mapping, dict):
+                    cluster_profile[metric_name] = mapping.get(str(cluster_id), mapping.get(cluster_id))
+        except Exception:
+            pass
+
         return {
             "cluster_id": cluster_id,
-            "cluster_label": interpretations.get(cluster_id, f"Cluster {cluster_id}"),
-            "cluster_profile": {
-                "description": "Movie performance segment based on budget, revenue, and other factors"
-            }
+            "cluster_label": cluster_label,
+            "cluster_profile": cluster_profile
         }
+
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Clustering error: {str(e)}")

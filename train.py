@@ -16,7 +16,21 @@ from src.models.ml_models import (
     MovieRevenuePredictor, MovieClassifier, MovieClusterer,
     TimeSeriesAnalyzer, DimensionalityReducer
 )
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_curve
 
+def find_best_threshold_f1(y_true, y_proba):
+    precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
+
+    # thresholds is length-1 vs precision/recall
+    f1_scores = (2 * precision * recall) / (precision + recall + 1e-9)
+
+    # ignore last point (no threshold there)
+    best_idx = int(f1_scores[:-1].argmax())
+    best_threshold = float(thresholds[best_idx])
+    best_f1 = float(f1_scores[best_idx])
+
+    return best_threshold, best_f1
 
 class MLPipeline:
     """Complete ML training and evaluation pipeline"""
@@ -148,31 +162,42 @@ class MLPipeline:
             # Store results
             self.results['models'][f'regression_{model_type}'] = metrics
     
+
+
     def _train_classification_model(self, X_train, X_test, df):
-        """Train classification model for hit/flop prediction"""
-        # Prepare classification target
-        y_class = df.loc[X_train.index.union(X_test.index), 'is_hit']
+        y_class = df.loc[X_train.index.union(X_test.index), "is_hit"]
         y_train_class = y_class.loc[X_train.index]
         y_test_class = y_class.loc[X_test.index]
-        
-        # Train classifier
-        classifier = MovieClassifier(model_type='random_forest')
-        classifier.train(X_train, y_train_class)
-        
-        # Evaluate
+
+        # ✅ Make a validation split ONLY from training data (no leakage)
+        X_tr, X_val, y_tr, y_val = train_test_split(
+            X_train, y_train_class,
+            test_size=0.2,
+            random_state=config.RANDOM_STATE,
+            stratify=y_train_class
+        )
+
+        # ✅ Train XGBoost classifier
+        classifier = MovieClassifier(model_type="xgboost")  # or "xgboost_calibrated"
+        classifier.train(X_tr, y_tr)
+
+        # ✅ Tune threshold on validation probabilities
+        val_proba = classifier.predict_proba(X_val)[:, 1]
+        best_thr, best_val_f1 = find_best_threshold_f1(y_val, val_proba)
+        classifier.set_threshold(best_thr)
+
+        print(f"\n[THRESHOLD TUNING] Best threshold={best_thr:.4f} (val F1={best_val_f1:.4f})")
+
+        # ✅ Evaluate on held-out test using tuned threshold
         metrics = classifier.evaluate(X_test, y_test_class)
-        
-        # Feature importance
+
         importance = classifier.get_feature_importance(self.preprocessor.feature_names)
-        print(f"\nTop 10 Important Features for Classification:")
-        print(importance.head(10))
-        metrics['feature_importance'] = importance.head(20).to_dict()
-        
-        # Save model
+        metrics["feature_importance"] = importance.head(20).to_dict()
+
+        # ✅ Save tuned threshold inside the artifact
         classifier.save()
-        
-        # Store results
-        self.results['models']['classification'] = metrics
+
+        self.results["models"]["classification"] = metrics
     
     def _train_clustering_model(self, X_train, df):
         """Train clustering model for movie segmentation"""
