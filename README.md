@@ -1,12 +1,24 @@
 # 🎬 Movie Revenue Predictor
 
-Not a notebook. A full system with a REST API, orchestrated retraining pipelines, CI/CD, and a live dashboard. Built solo.
+Not a notebook. A full ML system with three prediction tasks, a live dashboard, orchestrated pipelines, and CI/CD. Built solo.
+
+🔗 **[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/DaraBodla/Movie-Intelligence)**
+
+---
+
+## screenshots
+
+![Home](movie_1.png)
+![Predict](movie_2.png)
+![Results](movie_3.png)
 
 ---
 
 ## what it does
 
-Takes movie metadata and returns a revenue prediction. The model layer is a stacked ensemble of gradient boosting models. FastAPI handles serving. Prefect manages retraining. Streamlit sits on top for exploration and live predictions.
+Takes movie metadata and returns three things at once: a revenue prediction, a hit/flop classification, and a movie archetype cluster. The model version is v1.2.0, last trained December 2025.
+
+You can run predictions three ways: manual input, TMDB search by movie title, or batch processing a CSV.
 
 ---
 
@@ -14,13 +26,15 @@ Takes movie metadata and returns a revenue prediction. The model layer is a stac
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Streamlit Dashboard                  │
-│              (exploration + live predictions)            │
+│                   Streamlit Dashboard                    │
+│     Home · Predict · Model Dashboard · Data Explorer     │
+│              Monitoring · Resources                      │
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
 │                    FastAPI Backend                        │
-│              /predict  /retrain  /metrics                │
+│         /predict/revenue  /predict/classification        │
+│                  /predict/clustering                     │
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
@@ -33,6 +47,20 @@ Takes movie metadata and returns a revenue prediction. The model layer is a stac
 │       ingest → preprocess → train → evaluate → save      │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## results
+
+| Task | Metric | Score |
+|---|---|---|
+| Regression | R² | 0.6772 |
+| Regression | RMSE | $92,499,921 |
+| Regression | MAE | $36,195,021 |
+| Classification | Accuracy | 70.26% |
+| Classification | F1 | 0.7401 |
+| Clustering | Silhouette | 0.1009 |
+| Inference | Latency | 271ms |
 
 ---
 
@@ -108,26 +136,27 @@ python -m pipeline.train
 
 ## API
 
-```bash
-POST /predict
-```
+**POST /predict/revenue**
 
 ```json
 {
-  "budget": 150000000,
-  "genres": ["Action", "Adventure"],
-  "runtime": 132,
-  "release_month": 6,
-  "cast_popularity": 87.4,
-  "director_experience": 12
+  "budget": 49000000,
+  "runtime": 120,
+  "release_month": "June",
+  "genres": ["Action"],
+  "popularity": 50.0,
+  "vote_average": 7.0,
+  "vote_count": 1000
 }
 ```
 
 ```json
 {
-  "predicted_revenue": 412800000,
-  "confidence_interval": [318000000, 507600000],
-  "model_version": "v1.3.2"
+  "predicted_revenue": 76072774,
+  "roi": 55.3,
+  "classification": "Flop",
+  "cluster_label": "Profitable Mid-Budget",
+  "model_version": "v1.2.0"
 }
 ```
 
@@ -136,18 +165,6 @@ POST /predict
 ## CI/CD
 
 Every push to `main` runs lint, tests, builds the Docker image, deploys, and hits a smoke test. Retraining is on a Prefect schedule. A new model only gets promoted if it beats the current one on held-out eval.
-
----
-
-## results
-
-| Metric | Score |
-|---|---|
-| R² | 0.87 |
-| MAE | ~$18M |
-| RMSE | ~$34M |
-
-The ensemble beats any single model by around 6 to 9 percent on R².
 
 ---
 
